@@ -4,7 +4,7 @@ Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
 Tested up to: 6.6
-Stable tag: 1.3.8.2
+Stable tag: 1.3.8.3
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -130,19 +130,32 @@ Example : *[mfile upload-file-433 filetypes:jpeg|png|jpg|gif]*
 
 You can change text `Drag & Drop Files Here or Browse Files` text in Wordpress Admin menu under `Contact` > `Drag & Drop Upload`.
 
-= How can I change email attachment as links? =
+= How to Display Links in an Email =
+
+Some email servers have limitations on file attachment sizes (e.g., Google allows a maximum of 20-25 MB). Attaching large files to emails can be problematic. Consider using this option to display links in the email instead of attaching the files.
 
 Go to WP Admin `Contact -> Drag & Drop Upload` settings then check "Send Attachment as links?" option.
 
-To manage mail template, go to Contact Forms edit specific form and Select `Mail` tab. In Message Body add generated code from mfile. ( Example Below )
+To manage mail template, go to Contact Forms edit specific form and Select `Mail` tab. In `Message Body` add generated code from [mfile]. ( Example Below )
 
 Message Body : [your-message]
 
 File Links 1 : [upload-file-754]
-
 File Links2 : [upload-file-755]
 
 Note : No need to add in `File Attachments` field.
+
+See [Video Demonstration](https://www.youtube.com/watch?v=DvuvmzIImYo&t=232s)
+
+= How to Attach Files to an Email =
+
+1. In order to attach files to email you will need to check and make sure **"send as file(s) as links"** option is unchecked.
+2. Go to Wordpress admin menu "Contact -> Edit {specific_form}" click or hover the cf7 form you want to edit.
+3. In **"Edit Contact Form"** page click "Mail" tab and in the bottom you will see **"File attachments"** field, on this field add your upload field name (ie: **[upload-file-xxx]**), you will find the upload name in **"Form"** tab generated from `[mfile]` shortcode.
+4. If attaching multiple files from a different file upload just add all the upload fields name. (see example below)
+File attachments: `[upload-file-111] [upload-file-222]`
+
+See [Video Demonstration](https://www.youtube.com/watch?v=DvuvmzIImYo&t=113s)
 
 == Installation ==
 
@@ -164,6 +177,9 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+
+= 1.3.8.3 =
+- Bug - Fixed "send file(s) as links" option not creating year/month folder structure.
 
 = 1.3.8.2 =
 - Fixes - Show query error using Query Monitor plugin [Here](https://wordpress.org/support/topic/php-error-pops-up-via-query-monitor/)

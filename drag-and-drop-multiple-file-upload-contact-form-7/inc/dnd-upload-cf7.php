@@ -201,7 +201,7 @@
 
 		// If save as attachment ( also : Check if upload use year and month folders )
 		if( dnd_cf7_settings('drag_n_drop_mail_attachment') == 'yes' ) {
-			$uploads_dir = ( dnd_cf7_settings('uploads_use_yearmonth_folders') ? wpcf7_dnd_dir . $upload['subdir'] : wpcf7_dnd_dir );
+			$uploads_dir = ( get_option('uploads_use_yearmonth_folders') ? wpcf7_dnd_dir . $upload['subdir'] : wpcf7_dnd_dir );
 		}
 
 		// Create directory
