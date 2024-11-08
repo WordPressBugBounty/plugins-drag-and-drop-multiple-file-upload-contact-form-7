@@ -3,8 +3,8 @@ Contributors: glenwpcoder, yordansoares
 Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
-Tested up to: 6.6
-Stable tag: 1.3.8.3
+Tested up to: 6.7
+Stable tag: 1.3.8.4
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -177,6 +177,10 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+
+= 1.3.8.4 =
+- Added Compatibility on Contact Form 7 6.0.
+- Wordpress 6.7 Compatibility check.
 
 = 1.3.8.3 =
 - Bug - Fixed "send file(s) as links" option not creating year/month folder structure.
