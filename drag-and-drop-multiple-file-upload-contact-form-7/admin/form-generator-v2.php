@@ -38,7 +38,7 @@
 	<fieldset>
 		<legend id="<?php echo esc_attr( $tgg->ref( 'limit-option-legend' ) ); ?>">
 			<?php
-				echo esc_html( __( 'File size limit (bytes)', 'contact-form-7' ) );
+				esc_html_e( 'File size limit (bytes)', 'drag-and-drop-multiple-file-upload-contact-form-7' );
 			?>
 		</legend>
 		<label>
@@ -59,7 +59,7 @@
 	<fieldset>
 		<legend id="<?php echo esc_attr( $tgg->ref( 'filetypes-option-legend' ) ); ?>">
 			<?php
-				echo esc_html( __( 'Acceptable file types', 'contact-form-7' ) );
+				esc_html_e( 'Acceptable file types', 'drag-and-drop-multiple-file-upload-contact-form-7' );
 			?>
 		</legend>
 		<label>
@@ -80,7 +80,7 @@
 	<fieldset>
 		<legend id="<?php echo esc_attr( $tgg->ref( 'blacklist-types-option-legend' ) ); ?>">
 			<?php
-				echo esc_html( __( 'Blacklist file types', 'contact-form-7' ) );
+				esc_html_e( 'Blacklist file types', 'drag-and-drop-multiple-file-upload-contact-form-7' );
 			?>
 		</legend>
 		<label>
@@ -101,7 +101,7 @@
 	<fieldset>
 		<legend id="<?php echo esc_attr( $tgg->ref( 'min-file-option-legend' ) ); ?>">
 			<?php
-				echo esc_html( __( 'Minimum File Upload', 'contact-form-7' ) );
+				esc_html_e( 'Minimum File Upload', 'drag-and-drop-multiple-file-upload-contact-form-7' );
 			?>
 		</legend>
 		<label>
@@ -122,7 +122,7 @@
 	<fieldset>
 		<legend id="<?php echo esc_attr( $tgg->ref( 'max-file-option-legend' ) ); ?>">
 			<?php
-				echo esc_html( __( 'Minimum File Upload', 'contact-form-7' ) );
+				esc_html_e( 'Minimum File Upload', 'drag-and-drop-multiple-file-upload-contact-form-7' );
 			?>
 		</legend>
 		<label>
