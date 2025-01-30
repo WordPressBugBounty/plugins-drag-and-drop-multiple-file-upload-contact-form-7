@@ -38,7 +38,7 @@
 	add_action('wpcf7_mail_components','dnd_cf7_mail_components', 50, 2);
 
 	// Auto clean up dir/files
-	add_action('shutdown', 'dnd_cf7_auto_clean_dir', 20, 0 );
+	add_action('shutdown', 'dnd_cf7_auto_clean_dir', 20, 1 );
 
 	// Add row meta links
 	add_filter( 'plugin_row_meta', 'dnd_custom_plugin_row_meta', 10, 2 );
@@ -58,12 +58,43 @@
 	// Flamingo Hooks
 	add_action('before_delete_post', 'dnd_remove_uploaded_files');
 
+	// Generate uqique id/random
+	add_action( 'init', 'dnd_cf7_generate_cookie' );
+
     // Nonce
-    function dnd_wpcf7_nonce_check(){
+    function dnd_wpcf7_nonce_check() {
+		// Block curl request.
+		if ( strpos( $_SERVER['HTTP_USER_AGENT'], 'curl' ) !== false ) {
+			wp_send_json_error('Request blocked: cURL access is forbidden.');
+		}
+
         if( ! check_ajax_referer( 'dnd-cf7-security-nonce', false, false ) ){
             wp_send_json_success( wp_create_nonce( "dnd-cf7-security-nonce" ) );
         }
     }
+
+	// Generate cookie
+	function dnd_cf7_generate_cookie() {
+		if ( ! isset( $_COOKIE['wpcf7_guest_user_id'] ) ) {
+			$characters       = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+			$charactersLength = strlen( $characters );
+			$randomString     = '';
+
+			for ( $i = 0; $i < 12; $i++ ) {
+				$randomString .= $characters[ random_int( 0, $charactersLength - 1 ) ] ;
+			}
+
+			$guest_id = $randomString .'-'. mt_rand(1000, 9999);
+			setcookie( 'wpcf7_guest_user_id', $guest_id, time() + 3600 * 12, '/' );
+		}
+	}
+
+	// Return created cookie with unique id.
+	function dnd_cf7_get_unique_id() {
+		if ( isset( $_COOKIE['wpcf7_guest_user_id'] ) ) {
+			return $_COOKIE['wpcf7_guest_user_id'];
+		}
+	}
 
     // Add links to settings
     function dnd_cf7_upload_links( $actions ) {
@@ -144,13 +175,20 @@
 		$forms_tags  = $submission->get_contact_form();
 		$uploads_dir = dnd_get_upload_dir();
 
+		// Send as link?
+		$send_link = ( dnd_cf7_settings('drag_n_drop_mail_attachment') == 'yes' ? true : false );
+
 		if( $forms = $forms_tags->scan_form_tags() ) {
 			foreach( $forms as $field ) {
 				$field_name = $field->name;
 				if( $field->basetype == 'mfile' && isset( $posted_data[$field_name] ) && ! empty( $posted_data[$field_name] ) ) {
-					// @todo - check $posted_data if array
-					foreach( $posted_data[$field_name] as $key => $file ) {
-						$posted_data[$field_name][$key] = trailingslashit( $uploads_dir['upload_url'] ) . wp_basename( $file );
+					if ( is_array( $posted_data ) ) {
+						foreach( $posted_data[$field_name] as $key => $file ) {
+							if ( $send_link || strpos( dirname($file), 'wpcf7-files' ) !== false ) {
+								$file = wp_basename( $file ); // remove duplicate path "/12/file.jpg" to just "/file.jpg"
+							}
+							$posted_data[$field_name][$key] = trailingslashit( $uploads_dir['upload_url'] ) . $file;
+						}
 					}
 				}
 			}
@@ -195,9 +233,17 @@
 	}
 
 	// Get folder path
-	function dnd_get_upload_dir() {
-		$upload = wp_upload_dir();
-		$uploads_dir = wpcf7_dnd_dir . '/wpcf7-files';
+	function dnd_get_upload_dir( $dir = false ) {
+		$upload        = wp_upload_dir();
+		$uploads_dir   = wpcf7_dnd_dir . '/wpcf7-files';
+
+		// Add random folder.
+		if ( true === $dir ) {
+			$random_folder = dnd_cf7_get_unique_id();
+			if ( $random_folder ) {
+				$uploads_dir   = $uploads_dir .'/'. $random_folder;
+			}
+		}
 
 		// If save as attachment ( also : Check if upload use year and month folders )
 		if( dnd_cf7_settings('drag_n_drop_mail_attachment') == 'yes' ) {
@@ -222,7 +268,7 @@
 	}
 
 	// Clean up directory - From Contact Form 7
-	function dnd_cf7_auto_clean_dir( $seconds = 3600, $max = 60 ) {
+	function dnd_cf7_auto_clean_dir( $dir_path = null ) {
 		if ( is_admin() ) {
 			return;
 		}
@@ -233,39 +279,51 @@
         }
 
 		// Setup dirctory path
-		$upload = wp_upload_dir();
-		$dir = trailingslashit( $upload['basedir'] ) . wpcf7_dnd_dir . '/wpcf7-files/';
+		$upload  = wp_upload_dir();
+
+		// Setup/Get dir
+		if ( ! $dir_path ) {
+			$dir = trailingslashit( $upload['basedir'] ) . wpcf7_dnd_dir . '/wpcf7-files/'; // upload path.
+		} else {
+			$dir = trailingslashit( $dir_path ); // get path from recursive
+		}
 
 		// Make sure dir is readable or writable
 		if ( ! is_dir( $dir ) || ! is_readable( $dir ) || ! wp_is_writable( $dir ) ) {
 			return;
 		}
 
-		$seconds = apply_filters( 'dnd_cf7_auto_delete_files', $seconds );
-		$max = absint( $max );
-		$count = 0;
+		$seconds = apply_filters( 'dnd_cf7_auto_delete_files', 3600 );  // 1 hour
+		$max     = apply_filters( 'dnd_cf7_max_file', 40 );
+		$count   = 0;
 
 		if ( $handle = @opendir( $dir ) ) {
 			while ( false !== ( $file = readdir( $handle ) ) ) {
-				if ( $file == "." || $file == ".." ) {
+				// exclude .htaccess and index.php file.
+				if ( $file == "." || $file == ".." || $file == '.htaccess' || $file == 'index.php' ) {
+					continue;
+				}
+
+				// Check if current path is directory (recursive)
+				if ( is_dir( $dir . $file ) ) {
+					dnd_cf7_auto_clean_dir( $dir . $file );
 					continue;
 				}
 
 				// Get file time of files OLD files.
 				$mtime = @filemtime( $dir . $file );
 
+				// Compare modified time and time before deletion.
 				if ( $mtime && time() < $mtime + absint( $seconds ) ) { // less than $seconds old
 					continue;
 				}
 
 				// Delete files from dir
-				if( $file != '.htaccess' && $file != 'index.php' ) {
-					wp_delete_file( $dir . $file );
-				}
+				wp_delete_file( $dir . $file );
 
 				$count += 1;
 
-				if ( $max <= $count ) {
+				if ( absint( $max ) <= $count ) {
 					break;
 				}
 			}
@@ -276,9 +334,6 @@
 	// Hooks before sending the email - ( append links to body email )
 	function dnd_cf7_before_send_mail( $wpcf7 ){
 		global $_mail;
-
-		// Get upload path / dir
-		$upload_path = dnd_get_upload_dir();
 
 		// Mail Counter
 		$_mail = 0;
@@ -306,9 +361,6 @@
 			// Prop email
 			$mail = $wpcf7->prop('mail');
 			$mail_2 = $wpcf7->prop('mail_2');
-
-			// Default upload path
-			$simple_path = dirname( $upload_path['upload_url'] ); // dirname - remove duplicate form dir (/wpcf-dnd-uploads/wpcf7-dnd-uploads/example.jpg)
 
 			// Loop fields and replace mfile code
 			foreach( $fields as $field ) {
@@ -349,32 +401,6 @@
 		return $wpcf7;
 	}
 
-	// Get file links.
-	function dnd_cf7_links( $files, $use_html = false) {
-
-		// check and make sure we have files
-		if( ! $files ) {
-			return;
-		}
-
-		// Setup html links
-		$links = array();
-		foreach( $files as $file ) {
-			$links[] = ( $use_html ? '<a href="'. esc_url( $file ) .'">'. wp_basename( $file ) .'</a>' : $file );
-		}
-
-		// Allow other themes/plugin to modify data.
-		return apply_filters('dndcf7_before_send_files', $links, $files );
-	}
-
-	// Log message...
-	function dnd_logs( $message, $email = false ) {
-		$uploads_dir = dnd_get_upload_dir();
-		$file = fopen( $uploads_dir['upload_dir']."/logs.txt", "a") or die("Unable to open file!");
-		fwrite( $file, "\n". ( is_array( $message ) ? print_r( $message, true ) : $message ) );
-		fclose( $file );
-	}
-
 	// hooks - Custom cf7 Mail components ( Attached File on Email )
 	function dnd_cf7_mail_components( $components, $form ) {
 		global $_mail;
@@ -389,16 +415,19 @@
 		// cf7 - Submission Object
 		$submission = WPCF7_Submission::get_instance();
 
+		// Posted data
+		$posted_data = $submission->get_posted_data();
+
 		// get all form fields
 		$fields = $form->scan_form_tags();
 
-		// Send email link as an attachment.
+		// Display file links in email (no attachment)
 		if( dnd_cf7_settings('drag_n_drop_mail_attachment') == 'yes' ) {
 			return $components;
 		}
 
 		// Get mail,mail_2 attachment [tags]
-		$mail = array('mail','mail_2');
+		$mail       = array('mail','mail_2');
 		$props_mail = array();
 
 		foreach( $mail as $single_mail ) {
@@ -415,25 +444,25 @@
 				// If field type equal to mfile which our default field.
 				if( $field->basetype == 'mfile') {
 
-					// Make sure we have files to attach
-					if( isset( $_POST[ $field->name ] ) && count( $_POST[ $field->name ] ) > 0 ) {
+					// Check and make sure [upload-file-xxx] exists in attachments - fields
+					if ( false !== strpos( $mail['attachments'], "[{$field->name}]" ) ) {
 
-						// Check and make sure [upload-file-xxx] exists in attachments - fields
-						if ( false !== strpos( $mail['attachments'], "[{$field->name}]" ) ) {
+						// Loop all the files and attach to cf7 components
+						if ( isset( $posted_data[ $field->name ] ) && ! empty( $posted_data[ $field->name ] ) ) {
+							if ( is_array( $posted_data[ $field->name ] ) ) {
+								foreach( $posted_data[ $field->name ] as $_file ) {
 
-							// Loop all the files and attach to cf7 components
-							foreach( $_POST[ $field->name ] as $_file ) {
+									// Convert url to dir
+									$new_file_name = str_replace( $uploads_dir['upload_url'], $uploads_dir['upload_dir'], $_file );
 
-								// Join dir and a new file name ( get from <input type="hidden" name="upload-file-333"> )
-								$new_file_name = trailingslashit( $uploads_dir['upload_dir'] ) . wp_basename( $_file );
-
-								// Check if submitted and file exists then file is ready.
-								if ( $submission && file_exists( $new_file_name )  ) {
-									$components['attachments'][] = $new_file_name;
+									// Check if submitted and file exists then file is ready.
+									if ( $submission && file_exists( $new_file_name )  ) {
+										$components['attachments'][] = $new_file_name;
+									}
 								}
 							}
-
 						}
+
 					}
 				}
 			}
@@ -450,6 +479,32 @@
 
 		// Return setup components
 		return $components;
+	}
+
+	// Get file links.
+	function dnd_cf7_links( $files, $use_html = false) {
+
+		// check and make sure we have files
+		if( ! $files ) {
+			return;
+		}
+
+		// Setup html links
+		$links = array();
+		foreach( $files as $file ) {
+			$links[] = ( $use_html ? '<a href="'. esc_url( $file ) .'">'. esc_html( wp_basename( $file ) ) .'</a>' : esc_url( $file ) );
+		}
+
+		// Allow other themes/plugin to modify data.
+		return apply_filters('dndcf7_before_send_files', $links, $files );
+	}
+
+	// Log message...
+	function dnd_logs( $message, $email = false ) {
+		$uploads_dir = dnd_get_upload_dir();
+		$file = fopen( $uploads_dir['upload_dir']."/logs.txt", "a") or die("Unable to open file!");
+		fwrite( $file, "\n". ( is_array( $message ) ? print_r( $message, true ) : $message ) );
+		fclose( $file );
 	}
 
 	// Load js and css
@@ -649,7 +704,10 @@
 		}
 
 		// Cf7 Conditional Field
-		if( in_array('cf7-conditional-fields/contact-form-7-conditional-fields.php', get_option('active_plugins') ) ){
+		if(
+			in_array('cf7-conditional-fields/contact-form-7-conditional-fields.php', get_option('active_plugins') ) ||
+		    in_array('cf7-conditional-fields/conditional-fields.php', get_option('active_plugins') )
+		){
 
 			$hidden_groups = json_decode( stripslashes( $_POST['_wpcf7cf_hidden_groups'] ) );
 			$form_id = WPCF7_ContactForm::get_current()->id();
@@ -803,7 +861,7 @@
         $blacklist_types = ( isset( $blacklist["$cf7_upload_name"] ) ?  explode( '|', $blacklist["$cf7_upload_name"] ) : '' );
 
 		// Get upload dir
-		$path = dnd_get_upload_dir();
+		$path = dnd_get_upload_dir( true ); // ok
 
 		// input type file 'name'
 		$name = 'upload-file';
@@ -878,7 +936,7 @@
 		// Randomize filename
 		if( 'yes' == dnd_cf7_settings('drag_n_drop_enable_unique_name') ) {
 			$random_name = md5( uniqid( rand(), true ) .'-'. mt_rand() .'-'. time() );
-			$filename = $random_name .'.'. $extension;
+			$filename    = $random_name .'.'. $extension;
 		}
 
 		// Add filter on upload file name
@@ -895,7 +953,7 @@
 
             // Setup path and files url
 			$files = array(
-				'path'	=>	basename( $path['upload_dir'] ),
+				'path'	=>	wp_basename( $path['upload_dir'] ),
 				'file'	=>	str_replace('/','-', $filename)
 			);
 
@@ -934,31 +992,47 @@
 		// Get folder directory
 		$dir = dnd_get_upload_dir();
 
-		// check and verify ajax request);
+		// check and verify ajax request.
         if( ! check_ajax_referer( 'dnd-cf7-security-nonce', 'security', false ) ) {
             wp_send_json_error('The security nonce is invalid or expired.');
         }
 
+		// Block curl request.
+		if ( strpos( $_SERVER['HTTP_USER_AGENT'], 'curl' ) !== false ) {
+			wp_send_json_error('Request blocked: cURL access is forbidden.');
+		}
 
-		// Sanitize Path
-		$get_path = ( isset( $_POST['path'] ) ? sanitize_text_field( $_POST['path'] ) : null );
+		// Sanitize Path.
+		$path = ( isset( $_POST['path'] ) ? sanitize_text_field( $_POST['path'] ) : null );
 
-		//limit the user input to a file name and to ignore injected path names
-		$path = basename( $get_path );
+		// Use only filename
+		if ( dnd_cf7_settings('drag_n_drop_mail_attachment') == 'yes' || strpos( dirname( $path ), 'wpcf7-files' ) !== false ) {
+			$path = wp_basename( $path ); // remove duplicate path "/12/file.jpg" to just "/file.jpg"
+		}
 
 		// Make sure path is set
-		if( ! is_null( $path ) ) {
+		if ( ! is_null( $path ) ) {
 
 			// Check valid filename & extensions
-			if (preg_match('/wp-|(\.php|\.exe|\.js|\.phtml|\.cgi|\.aspx|\.asp|\.bat)(?!_\.txt$)/', $path)) {
-                die('File not safe');
+			if ( preg_match( '/wp-|(\.php|\.exe|\.js|\.phtml|\.cgi|\.aspx|\.asp|\.bat)(?!_\.txt$)/', $path ) ) {
+                die( 'Error: File not safe' );
             }
+
+			// Validate path if it's match on the current folder
+			$unique_id      = dnd_cf7_get_unique_id();
+			$current_folder = dirname( $path );
+			$current_path   = $dir['upload_dir'] .'/'. $unique_id .'/'. wp_basename( $path );
+
+			// Show an error
+			if ( $unique_id !== trim( $current_folder ) || ! file_exists( $current_path ) ) {
+				die( 'Error: Unauthorized Request!' );
+			}
 
 			// Concatenate path and upload directory
 			$file_path = realpath( trailingslashit( $dir['upload_dir'] ) . trim( $path ) );
 
 			// Check if is in the correct upload_dir
-			if( ! preg_match("/". wpcf7_dnd_dir ."/i", $file_path ) ) {
+			if ( ! preg_match("/". wpcf7_dnd_dir ."/i", $file_path ) ) {
 				die('It\'s not a valid upload directory');
 			}
 

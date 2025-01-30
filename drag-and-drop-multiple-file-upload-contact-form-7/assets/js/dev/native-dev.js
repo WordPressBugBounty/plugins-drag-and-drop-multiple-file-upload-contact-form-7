@@ -2,7 +2,7 @@
  * CodeDropz Uploader
  * Copyright 2018 Glen Mongaya
  * CodeDrop Drag&Drop Uploader
- * @version 1.3.8.3
+ * @version 1.3.8.6
  * @author CodeDropz, Glen Don L. Mongaya
  * @license The MIT License (MIT)
  */
@@ -22,6 +22,23 @@
             .then(res => res.json())
             .then(({ data, success }) => success && (dnd_cf7_uploader.ajax_nonce = data))
             .catch(console.error)
+		}
+
+		// Generate random string
+		const generateRandomFolder = function( length = 20 ) {
+			const characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+			const charactersLength = characters.length;
+			let randomString = '';
+
+			// Generate a random string
+			for (let i = 0; i < length; i++) {
+				const randomIndex = Math.floor(Math.random() * charactersLength);
+				randomString += characters[randomIndex];
+			}
+
+			// Append the current timestamp (in seconds)
+			const timestamp = Math.floor(Date.now() / 1000); // Get Unix timestamp in seconds
+			return randomString + timestamp;
 		}
 
         // Parent input file type
@@ -135,6 +152,9 @@
             input.removeAttribute('accept');
         }
 
+		// Add unique ID or random string
+		input.setAttribute( 'data-random-id', generateRandomFolder() );
+
         // Setup Uploader
         var DND_Setup_Uploader = function( files, action ) {
 
@@ -154,6 +174,7 @@
             // CF7 - upload field name & cf7 id
             formData.append('form_id', input.dataset.id);
             formData.append('upload_name', input.dataset.name);
+			formData.append('upload_folder', input.getAttribute('data-random-id') );
 
             // black list file types
             /*if( input.hasAttribute('data-black-list') ){

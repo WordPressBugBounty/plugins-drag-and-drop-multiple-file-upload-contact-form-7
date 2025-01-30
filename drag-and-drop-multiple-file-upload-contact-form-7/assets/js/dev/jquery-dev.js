@@ -2,7 +2,7 @@
  * CodeDropz Uploader
  * Copyright 2018 Glen Mongaya
  * CodeDrop Drag&Drop Uploader
- * @version 1.3.8.3
+ * @version 1.3.8.6
  * @author CodeDropz, Glen Don L. Mongaya
  * @license The MIT License (MIT)
  */
@@ -37,6 +37,23 @@
 
 			// File Counter
 			localStorage.setItem( dataStorageName, 1);
+
+			// Generate random string
+			const generateRandomFolder = function( length = 20 ) {
+				const characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+				const charactersLength = characters.length;
+				let randomString = '';
+
+				// Generate a random string
+				for (let i = 0; i < length; i++) {
+					const randomIndex = Math.floor(Math.random() * charactersLength);
+					randomString += characters[randomIndex];
+				}
+
+				// Append the current timestamp (in seconds)
+				const timestamp = Math.floor(Date.now() / 1000); // Get Unix timestamp in seconds
+				return randomString + timestamp;
+			}
 
 			// Template Container
 			var cdropz_template = '<div class="codedropz-upload-handler">'
@@ -110,6 +127,9 @@
                 input.removeAttr('accept');
             }
 
+			// Add random or unique string
+			input.attr( 'data-random-id', generateRandomFolder() );
+
 			// Setup Uploader
 			var DND_Setup_Uploader = function( files, action ) {
 
@@ -131,6 +151,7 @@
 				// CF7 - upload field name & cf7 id
 				formData.append('form_id', input.data('id'));
 				formData.append('upload_name', input.data('name'));
+				formData.append('upload_folder', input.data('random-id') );
 
                 // black list file types
                 if( input.data('black-list') ){
@@ -370,3 +391,95 @@
 	}; // end fn.function
 
 }( jQuery ));
+
+jQuery(document).ready(function($){
+
+	// Custom event handler
+    var dnd_upload_cf7_event = function( target, name, data ) {
+        var event = new CustomEvent( 'dnd_upload_cf7_' + name, {
+			bubbles     : true,
+			detail     : data
+		});
+		$(target).get(0).dispatchEvent( event );
+    }
+
+	// Fires when an Ajax form submission has completed successfully, and mail has been sent.
+	document.addEventListener( 'wpcf7mailsent', function( event ) {
+
+		// Get input type file element
+		var inputFile = $('.wpcf7-drag-n-drop-file');
+		var $form = inputFile.parents('form');
+
+		// Reset upload list for multiple fields
+		if( inputFile.length > 0 ) {
+			$.each( inputFile, function(){
+				// Reset file counts
+				localStorage.setItem( $(this).attr('data-name') + '_count_files', 1 );
+			});
+		}else {
+			// Reset file counts
+			localStorage.setItem( inputFile.attr('data-name') + '_count_files', 1 );
+		}
+
+		// Remove status / progress bar
+		$('.dnd-upload-status', $form ).remove();
+		$('.dnd-upload-counter span', $form ).text('0');
+		$('span.has-error-msg', $form ).remove();
+
+	}, false );
+
+	window.initDragDrop = function () {
+
+		// Get text object options/settings from localize script
+		var TextOJB = dnd_cf7_uploader.drag_n_drop_upload;
+
+		// Support Multiple Fileds
+		$('.wpcf7-drag-n-drop-file').CodeDropz_Uploader({
+			'color'				:	'#fff',
+			'ajax_url'			: 	dnd_cf7_uploader.ajax_url,
+			'text'				: 	TextOJB.text,
+			'separator'			: 	TextOJB.or_separator,
+			'button_text'		:	TextOJB.browse,
+			'server_max_error'	: 	TextOJB.server_max_error,
+			'on_success'		:	function( input, progressBar, response ){
+
+				// Progressbar Object
+				var $progressDetails = $('#' + progressBar, input.parents('.codedropz-upload-wrapper') );
+				var $form = input.parents('form');
+				var $span =  $('.wpcf7-acceptance', $form );
+				var $input = $('input:checkbox', $span);
+
+				// If it's complete remove disabled attribute in button
+				if( $span.hasClass( 'optional' ) || $input.is( ':checked' ) || $span.length == 0 || $form.hasClass('wpcf7-acceptance-as-validation') )  {
+					setTimeout(function(){
+                        const buttonSubmit = $('input[type="submit"], button[type="submit"]', $form);
+                        if( buttonSubmit ){
+                            buttonSubmit.removeAttr('disabled');
+                        }
+                    }, 1);
+				}
+
+				// Append hidden input field
+				$progressDetails
+					.find('.dnd-upload-details')
+						.append('<span><input type="hidden" name="'+ input.attr('data-name') +'[]" value="'+ response.data.path +'/'+ response.data.file +'"></span>');
+
+				// Update counter
+				var $files_counter = ( Number( localStorage.getItem( input.data('name') + '_count_files' ) ) - 1 );
+				$('.dnd-upload-counter span', input.parents('.codedropz-upload-wrapper')).text( $files_counter );
+
+				// Js hook/event trigger after successful upload.
+				dnd_upload_cf7_event( $progressDetails, 'success', response );
+			}
+		});
+
+	}
+
+	window.initDragDrop();
+
+	// Usage: Custom js hook after success upload
+	document.addEventListener( 'dnd_upload_cf7_success', function( event ) {
+		console.log('success');
+	});
+
+});

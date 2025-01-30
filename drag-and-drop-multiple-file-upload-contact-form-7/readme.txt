@@ -1,10 +1,10 @@
-=== Drag and Drop Multiple File Upload - Contact Form 7 ===
+=== Drag and Drop Multiple File Upload for Contact Form 7 ===
 Contributors: glenwpcoder, yordansoares
 Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
 Tested up to: 6.7
-Stable tag: 1.3.8.5
+Stable tag: 1.3.8.6
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -13,7 +13,9 @@ This simple plugin create Drag & Drop or choose Multiple File upload in your Con
 
 == Description ==
 
-**Drag and Drop Multiple File Uploader** is a simple, straightforward WordPress plugin extension for Contact Form 7, which allows the user to upload multiple files using the **drag-and-drop** feature or the common browse-file of your webform.
+**Drag and Drop Multiple File Upload** is a simple, straightforward WordPress plugin extension for Contact Form 7, which allows the user to upload multiple files using the **drag-and-drop** feature or the common browse-file of your webform.
+
+Drag and Drop Multiple File Upload for Contact Form 7 is an independent plugin, not affiliated with or endorsed by the developers of Contact Form 7.
 
 Here's a little [DEMO](http://codedropz.com/contact).
 
@@ -177,6 +179,11 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+
+= 1.3.8.6 =
+- Fixes - Security Updates (fixed Vulnerability issue reported by Wordfence - CVE ID:CVE-2024-12267)
+- Bug Fix - Fixed bug [Support Link](https://wordpress.org/support/topic/argument-1-value-must-be-of-type-countablearray-string-given/)
+- Improvement - Added a random directory for each user/guest uploads to prevent file deletion across folders (related to item # 1)
 
 = 1.3.8.5 =
 - Hot fix ( Showing critical error on Php 7.3 and Up )
