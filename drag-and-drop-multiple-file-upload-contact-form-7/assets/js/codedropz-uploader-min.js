@@ -2,7 +2,7 @@
  * CodeDropz Uploader
  * Copyright 2018 Glen Mongaya
  * CodeDrop Drag&Drop Uploader
- * @version 1.3.8.6
+ * @version 1.3.8.7
  * @author CodeDropz, Glen Don L. Mongaya
  * @license The MIT License (MIT)
  */
@@ -30,7 +30,8 @@
                         </a>
                         <span class="dnd-progress-bar"><span></span></span>
                     </div>
-                `,d=document.createElement("div");return d.id=r,d.className="dnd-upload-status",d.innerHTML=a,t.parentNode.insertBefore(d,t.nextSibling),r},setProgressBar:function(e,t){let r=document.getElementById(e),a=r.querySelector(".dnd-progress-bar");if(a){c&&m.disableBtn(c);let d=t*a.offsetWidth/100;r.classList.add("in-progress"),100==t?(a.querySelector("span").style.width="100%",a.querySelector("span").textContent=`${t}% `):(a.querySelector("span").style.width=d+"px",a.querySelector("span").textContent=`${t}% `),100==t&&(r.classList.add("complete"),r.classList.remove("in-progress"))}return!1},bytesToSize:function(e){return 0===e?"0":fileSize=(kBytes=e/1024)>=1024?(kBytes/1024).toFixed(2)+"MB":kBytes.toFixed(2)+"KB"},disableBtn:function(e){e&&(e.classList.add("disable"),e.disabled=!0)}}};document.addEventListener("click",function(e){if(e.target.classList.contains("dnd-icon-remove")){e.preventDefault();var t=e.target,r=t.closest(".dnd-upload-status"),a=t.closest(".codedropz-upload-wrapper"),d=t.parentElement.getAttribute("data-storage"),o=Number(localStorage.getItem(d));if(r.classList.contains("in-progress")||r.querySelector(".has-error"))return r.remove(),localStorage.setItem(d,o-1),!1;t.classList.add("deleting"),t.textContent=dnd_cf7_uploader.drag_n_drop_upload.delete.text+"...";var n=new XMLHttpRequest;n.open("POST",dnd_cf7_uploader.ajax_url),n.setRequestHeader("Content-Type","application/x-www-form-urlencoded"),n.onload=function(){200===this.status&&JSON.parse(this.responseText).success&&(r.remove(),localStorage.setItem(d,o-1),a.querySelectorAll(".dnd-upload-status").length<=1&&a.querySelector(".has-error-msg")&&a.querySelector(".has-error-msg").remove(),a.querySelector(".dnd-upload-counter span").textContent=Number(localStorage.getItem(d))-1)},n.send("path="+r.querySelector('input[type="hidden"]').value+"&action=dnd_codedropz_upload_delete&security="+dnd_cf7_uploader.ajax_nonce),document.querySelectorAll(".has-error-msg").forEach(function(e){e.remove()})}}),HTMLElement.prototype.CodeDropz_Uploader=e}();
+                `,d=document.createElement("div");return d.id=r,d.className="dnd-upload-status",d.innerHTML=a,t.parentNode.insertBefore(d,t.nextSibling),r},setProgressBar:function(e,t){let r=document.getElementById(e),a=r.querySelector(".dnd-progress-bar");if(a){c&&m.disableBtn(c);let d=t*a.offsetWidth/100;r.classList.add("in-progress"),100==t?(a.querySelector("span").style.width="100%",a.querySelector("span").textContent=`${t}% `):(a.querySelector("span").style.width=d+"px",a.querySelector("span").textContent=`${t}% `),100==t&&(r.classList.add("complete"),r.classList.remove("in-progress"))}return!1},bytesToSize:function(e){return 0===e?"0":fileSize=(kBytes=e/1024)>=1024?(kBytes/1024).toFixed(2)+"MB":kBytes.toFixed(2)+"KB"},disableBtn:function(e){e&&(e.classList.add("disable"),e.disabled=!0)}}};document.addEventListener("click",function(e){if(e.target.classList.contains("dnd-icon-remove")){e.preventDefault();var t=e.target,r=t.closest(".dnd-upload-status"),a=t.closest(".codedropz-upload-wrapper"),d=t.parentElement.getAttribute("data-storage"),o=Number(localStorage.getItem(d));if(r.classList.contains("in-progress")||r.querySelector(".has-error"))return r.remove(),localStorage.setItem(d,o-1),!1;t.classList.add("deleting"),t.textContent=dnd_cf7_uploader.drag_n_drop_upload.delete.text+"...";var n=new XMLHttpRequest;n.open("POST",dnd_cf7_uploader.ajax_url),n.setRequestHeader("Content-Type","application/x-www-form-urlencoded"),n.onload=function(){if(200===this.status){var e=JSON.parse(this.responseText);if(e.success)r.remove(),localStorage.setItem(d,o-1),a.querySelectorAll(".dnd-upload-status").length<=1&&a.querySelector(".has-error-msg")&&a.querySelector(".has-error-msg").remove(),a.querySelector(".dnd-upload-counter span").textContent=Number(localStorage.getItem(d))-1;else{let t=r.querySelector(".dnd-upload-details");if(t){let n=document.createElement("span");n.classList.add("has-error-msg"),n.textContent=e.data,t.appendChild(n)}}}},n.send("path="+r.querySelector('input[type="hidden"]').value+"&action=dnd_codedropz_upload_delete&security="+dnd_cf7_uploader.ajax_nonce),document.querySelectorAll(".has-error-msg").forEach(function(e){e.remove()})}}),HTMLElement.prototype.CodeDropz_Uploader=e}();
+// END: CodeDropz Uploader function
 
 // Custom JS hook event
 var dnd_upload_cf7_event = function(target, name, data) {
@@ -145,8 +146,8 @@ document.addEventListener('DOMContentLoaded', function() {
 	window.initDragDrop();
 
 	// Usage: Custom js hook after success upload
-	document.addEventListener( 'dnd_upload_cf7_success', function( event ) {
-		console.log('success');
-	});
+	/*document.addEventListener( 'dnd_upload_cf7_success', function( event ) {
+		console.log(event.detail);
+	});*/
 
 });

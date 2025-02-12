@@ -59,7 +59,7 @@
 	add_action('before_delete_post', 'dnd_remove_uploaded_files');
 
 	// Generate uqique id/random
-	add_action( 'init', 'dnd_cf7_generate_cookie' );
+	add_action( 'send_headers', 'dnd_cf7_generate_cookie' );
 
     // Nonce
     function dnd_wpcf7_nonce_check() {
@@ -75,6 +75,12 @@
 
 	// Generate cookie
 	function dnd_cf7_generate_cookie() {
+
+		// if file send as link don't generate cookie as folder will added to /uploads/year/month
+		if ( 'yes' === dnd_cf7_settings('drag_n_drop_mail_attachment') ) {
+			return;
+		}
+
 		if ( ! isset( $_COOKIE['wpcf7_guest_user_id'] ) ) {
 			$characters       = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 			$charactersLength = strlen( $characters );
@@ -1015,7 +1021,7 @@
 
 			// Check valid filename & extensions
 			if ( preg_match( '/wp-|(\.php|\.exe|\.js|\.phtml|\.cgi|\.aspx|\.asp|\.bat)(?!_\.txt$)/', $path ) ) {
-                die( 'Error: File not safe' );
+                wp_send_json_error( 'Error: File not safe' );
             }
 
 			// Validate path if it's match on the current folder
@@ -1024,8 +1030,10 @@
 			$current_path   = $dir['upload_dir'] .'/'. $unique_id .'/'. wp_basename( $path );
 
 			// Show an error
-			if ( $unique_id !== trim( $current_folder ) || ! file_exists( $current_path ) ) {
-				die( 'Error: Unauthorized Request!' );
+			if ( 'yes' !== dnd_cf7_settings('drag_n_drop_mail_attachment') ) {
+				if ( ( $unique_id && $unique_id !== trim( $current_folder ) ) || ! file_exists( $current_path ) ) {
+					wp_send_json_error( 'Error: Unauthorized Request!' );
+				}
 			}
 
 			// Concatenate path and upload directory
@@ -1033,7 +1041,7 @@
 
 			// Check if is in the correct upload_dir
 			if ( ! preg_match("/". wpcf7_dnd_dir ."/i", $file_path ) ) {
-				die('It\'s not a valid upload directory');
+				wp_send_json_error('It\'s not a valid upload directory');
 			}
 
 			// Check if file exists

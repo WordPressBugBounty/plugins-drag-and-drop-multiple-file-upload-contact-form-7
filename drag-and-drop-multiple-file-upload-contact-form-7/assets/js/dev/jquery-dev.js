@@ -2,7 +2,7 @@
  * CodeDropz Uploader
  * Copyright 2018 Glen Mongaya
  * CodeDrop Drag&Drop Uploader
- * @version 1.3.8.6
+ * @version 1.3.8.7
  * @author CodeDropz, Glen Don L. Mongaya
  * @license The MIT License (MIT)
  */
@@ -380,6 +380,8 @@
 
 					// Update Counter
 					$('.dnd-upload-counter span', _parent_wrap ).text( Number( localStorage.getItem( removeStorageData ) ) - 1 );
+				} else {
+					$( '.dnd-upload-details', _dnd_status ).append('<span class="has-error-msg">'+ response.data +'</span>');
 				}
 			});
 
@@ -479,7 +481,7 @@ jQuery(document).ready(function($){
 
 	// Usage: Custom js hook after success upload
 	document.addEventListener( 'dnd_upload_cf7_success', function( event ) {
-		console.log('success');
+		//console.log('success');
 	});
 
 });

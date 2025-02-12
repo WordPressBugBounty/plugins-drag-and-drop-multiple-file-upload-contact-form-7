@@ -2,7 +2,7 @@
  * CodeDropz Uploader
  * Copyright 2018 Glen Mongaya
  * CodeDrop Drag&Drop Uploader
- * @version 1.3.8.6
+ * @version 1.3.8.7
  * @author CodeDropz, Glen Don L. Mongaya
  * @license The MIT License (MIT)
  */
@@ -443,7 +443,15 @@
 
                     // Update Counter
                     _parent_wrap.querySelector(".dnd-upload-counter span").textContent = Number(localStorage.getItem(removeStorageData)) - 1;
-                }
+                } else {
+					const upload_details = _dnd_status.querySelector('.dnd-upload-details');
+					if ( upload_details ) {
+						const errorMsg = document.createElement('span');
+						errorMsg.classList.add('has-error-msg');
+						errorMsg.textContent = response.data;
+						upload_details.appendChild( errorMsg );
+					}
+				}
             }
         };
 
