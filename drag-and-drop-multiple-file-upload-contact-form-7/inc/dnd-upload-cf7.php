@@ -59,7 +59,7 @@
 	add_action('before_delete_post', 'dnd_remove_uploaded_files');
 
 	// Generate uqique id/random
-	add_action( 'send_headers', 'dnd_cf7_generate_cookie' );
+	add_action( 'wp_footer', 'dnd_cf7_generate_cookie' );
 
     // Nonce
     function dnd_wpcf7_nonce_check() {
@@ -72,28 +72,6 @@
             wp_send_json_success( wp_create_nonce( "dnd-cf7-security-nonce" ) );
         }
     }
-
-	// Generate cookie
-	function dnd_cf7_generate_cookie() {
-
-		// if file send as link don't generate cookie as folder will added to /uploads/year/month
-		if ( 'yes' === dnd_cf7_settings('drag_n_drop_mail_attachment') ) {
-			return;
-		}
-
-		if ( ! isset( $_COOKIE['wpcf7_guest_user_id'] ) ) {
-			$characters       = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-			$charactersLength = strlen( $characters );
-			$randomString     = '';
-
-			for ( $i = 0; $i < 12; $i++ ) {
-				$randomString .= $characters[ random_int( 0, $charactersLength - 1 ) ] ;
-			}
-
-			$guest_id = $randomString .'-'. mt_rand(1000, 9999);
-			setcookie( 'wpcf7_guest_user_id', $guest_id, time() + 3600 * 12, '/' );
-		}
-	}
 
 	// Return created cookie with unique id.
 	function dnd_cf7_get_unique_id() {
@@ -151,15 +129,38 @@
 
 	// Remove uploaded files when item is deleted permanently.
 	function dnd_remove_uploaded_files( $post_id ) {
+		// no post id bail early.
+		if ( ! $post_id ) {
+			return;
+		}
+
+		// Get the post type and post
 		$post_type = get_post_type( $post_id );
 		$page      = get_post( $post_id );
-		if( $post_type == 'flamingo_inbound' ) {
+
+		if ( $post_type == 'flamingo_inbound' ) {
 			preg_match_all( '/(.*?)(\/'.wpcf7_dnd_dir.'\/wpcf7-files\/.*$)/m', $page->post_content, $matches );
-			if( $matches[0] && count( $matches[0] ) > 0 ) {
-				foreach( $matches[0] as $files ) {
-					$new_file = str_replace( site_url().'/', wp_normalize_path( ABSPATH ), $files );
-					if( file_exists( $new_file ) ) {
-						wp_delete_file( $new_file );
+			if ( $matches[0] && count( $matches[0] ) > 0 ) {
+				foreach ( $matches[0] as $files ) {
+
+					// Convert url to dir
+					$file = str_replace( site_url() . '/', wp_normalize_path( ABSPATH ), $files );
+
+					// Check if it's a regular file.
+					if ( is_file( $file ) ) {
+
+						// Extract and sanitize the filename
+						$file_path = dirname( $file ) . '/' . sanitize_file_name( wp_basename( $file ) );
+
+						// Prevent traversal attack
+						$real_path   = realpath( $file_path );
+						$wp_dir      = wp_get_upload_dir(); //WordPress dir
+						$uploads_dir = wp_normalize_path( realpath( $wp_dir['basedir'] ). '/'. wpcf7_dnd_dir );
+
+						// Check if the file exists and is within the uploads directory
+						if ( $real_path && file_exists( $real_path ) && strpos( $real_path, $uploads_dir ) === 0 ) {
+							wp_delete_file( $real_path );
+						}
 					}
 				}
 			}
@@ -875,8 +876,11 @@
 		// Get File ( name, type, tmp_name, size, error )
 		$file = isset( $_FILES[$name] ) ? $_FILES[$name] : null;
 
+		// Tmp file
+		$tmp_file = preg_replace('/^.*?:\/\//', '', $file['tmp_name'] );
+
 		// Tells whether the file was uploaded via HTTP POST
-		if ( ! is_uploaded_file( $file['tmp_name'] ) ) {
+		if ( ! is_uploaded_file( $tmp_file ) ) {
 			$failed_error = dnd_cf7_settings('drag_n_drop_error_failed_to_upload');
 			wp_send_json_error( '('. $file['error'] .') ' . ( $failed_error ? $failed_error : dnd_cf7_error_msg('failed_upload') ) );
 		}
@@ -920,7 +924,7 @@
                 }
 
                 // Get file type and extension name
-                $wp_filetype = wp_check_filetype_and_ext( $file['tmp_name'], $file['name'] ); //[ext, type]
+                $wp_filetype = wp_check_filetype_and_ext( $tmp_file, $file['name'] ); //[ext, type]
                 $valid_mimes = explode('|', $supported_type); // array[png, jpg]
 
                 if( empty( $wp_filetype['type'] ) || empty( $wp_filetype['ext'] ) || ! in_array( $wp_filetype['ext'], $valid_mimes ) ){
@@ -952,7 +956,7 @@
 		$new_file = path_join( $path['upload_dir'], $filename );
 
 		// Upload File
-		if ( false === move_uploaded_file( $file['tmp_name'], $new_file ) ) {
+		if ( false === move_uploaded_file( $tmp_file, $new_file ) ) {
 			$failed_error = dnd_cf7_settings('drag_n_drop_error_failed_to_upload');
 			wp_send_json_error( '('. $file['error'] .') ' . ( $failed_error ? $failed_error : dnd_cf7_error_msg('failed_upload') ) );
 		}else{
@@ -1352,6 +1356,25 @@
 		return $default_value;
 	}
 
+	// Generate cookie (Cookie expiration 12 Hours)
+	function dnd_cf7_generate_cookie() {
+
+		// if file send as link don't generate cookie as folder will added to /uploads/year/month
+		if ( 'yes' === dnd_cf7_settings('drag_n_drop_mail_attachment') ) {
+			return;
+		}
+		?>
+		<script type="text/javascript">
+			document.addEventListener("DOMContentLoaded", function() {
+				if ( ! document.cookie.includes("wpcf7_guest_user_id")) {
+					document.cookie = "wpcf7_guest_user_id=" + crypto.randomUUID() + "; path=/; max-age=" + (12 * 3600) + "; samesite=Lax";
+				}
+			});
+		</script>
+		<?php
+	}
+
+	// Get current language (Polylang & WPML)
     function dnd_upload_cf7_lang() {
         $lang = null;
 

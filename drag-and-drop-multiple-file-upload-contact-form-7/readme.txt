@@ -4,7 +4,7 @@ Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
 Tested up to: 6.7
-Stable tag: 1.3.8.7
+Stable tag: 1.3.8.8
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -49,36 +49,35 @@ To **adjust** or **disable** the auto-deletion feature, we suggest upgrading to 
 
 Check out the available features in the **PRO version**.
 
-* **Image Preview** - Show Thumbnail for images
-* Adjust **Auto Deletion** of Files - After Form Submission
-  - *(1 hour, 4 hours, 8 hours , days, months etc)*
-* Zip Files ( Compressed File )
-* Save Files to **"Wordpress Media Library"**
-* Change Wordpress Upload Directory
-* Change **Upload Folder** To:
-  - Contact Form 7 - Fields
-  - Generated Date & Time - Timestamp
-  - Random Folder
-  - By User - Required Login
-  - Custom Folder
-  - Dynamic Folder - *user (name, id), post (id, slug), cf7 fields*
-* Send as Individual Email Attachments, Zip Archive, or Links"
-* Chunks Upload *( Break large files into smaller Chunks )*
-  - Capable of uploading large files.
-* set a Max Total Size *( of all Uploaded Files )*
-* Parallel Upload *(No. of files that can be uploaded simultaneously)*
-* Change **Filename Pattern** ({filename}, {cf7-field-name}, {ip_address}, {random}, {post_id}, {post_slug}, etc.)
-* **New** - Color Options (File Size, Progress Bar, Filename, etc.)
-* **New** - Disabled the Button to Prevent Duplicate Submissions"
-* **New** - Image preview on email
-* **New** - File Remote Storage *(OneDrive, Google Drive, Amazon S3, FTP, Dropbox)*
-* **New** - Save **Form Entries** in the Admin
-* **New** - Select "Dark" or "Light" Theme
-* **New** - Validate Image Sizes (Width & Height)
-* Able Resize Image (ie: 800x800) - **Standard** Version Only
-* Automatically Optimizing Images (**Standard** Version Only)
-* Enhanced Security (Updated Regularly)
-* Code Optimization and Improved Performance
+1. **Upload Large File** - Supports uploading large files.
+2. **Image Preview** - Displays thumbnails for images.
+3. **Auto Delete Files** - Automatically deletes files after a set time *(hours, weeks, days, months, etc)*
+4. **Zip Files** - Compress uploaded files into a ZIP archive
+5. **Save Files to Media Library** - Store files in the WordPress media library.
+6. **Change Upload Directory** - Customize the default WordPress upload directory.
+7. **Upload Folder** - 📂 Choose a custom folder to store files:
+   ✅ Contact Form 7 Fields: Use any field name
+   ✅ Generated Date & Time: Timestamp-based folders
+   ✅ Random Folder: Auto-generated letters & numbers
+   ✅ By User: Requires login to store files in the user's email or first name.
+   ✅ Custom Folder: Manually input a folder name
+   ✅ Dynamic Folder: *User (name, id), Post (id, slug), CF7 field*
+8. **Send as Attachments, Zip, or Links** - Flexible file delivery options.
+9. **Chunked Uploads** - Upload large files in smaller chunks to avoid timeouts.
+10. **Max Total Size** - Set the maximum combined size for all uploaded files.
+11. **Parallel Upload** - Limit simultaneous uploads to optimize server performance.
+12. **Custom Filename** - Define custom filename patterns: *( {filename}, {cf7-field-name}, {ip_address}, {random}, {post_id}, {post_slug}, etc. )*
+13. **Color Options** - Customize colors for **file size**, **progress bar**, **filename**, and more.
+14. **Prevent Duplicate** - Disable button to prevent duplicate submissions.
+15. **Image preview in email** - Display image previews in email notifications.
+16. **Custom Theme** - Switch between **"Dark"** or **"Light"** themes.
+17. **Form Entries** - Store form entries in WordPress admin.
+18. **Seamless Remote Storage Integration** - 🔥 Supports: **OneDrive**, **Google Drive**, **Amazon S3**, **Dropbox**, **FTP**.
+19. **Image Size Validation** - Ensure images meet required width and height.
+20. **Image Resize** - Supports image resizing (e.g., 800x800). *(**Standard** Version Only)*
+21. **Optimize Image** - Optimize images after resizing. *(**Standard** Version Only)*
+22. **Security** - Ensure security with regular updates, vulnerability scans, and threat protection.
+23. **Optimized Code & Performance** – Improve speed and efficiency.
 
 **Pro version** is also compatible with:
 
@@ -179,6 +178,13 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+
+= 1.3.8.8 =
+- Fixes - Fixed Vulnerability issues reported by Phat RiO - BlueRock (via Wordfence)
+  * Unauthenticated Arbitrary File Deletion
+  * Unauthenticated PHP Object Injection via PHAR to Arbitrary File Deletion
+- Added - Solution to prevent file deletion when flamingo message is deleted from the admin.
+- Fixed - Cookie issues prevent from caching. [Support Link](https://wordpress.org/support/topic/wpcf7_guest_user_id-cookie/)
 
 = 1.3.8.7 =
 - Fixes - Header already sent issue[support](https://wordpress.org/support/topic/debug-php-warning-2/)
