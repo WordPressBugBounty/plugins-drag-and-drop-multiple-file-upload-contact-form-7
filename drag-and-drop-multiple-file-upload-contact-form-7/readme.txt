@@ -3,8 +3,8 @@ Contributors: glenwpcoder, yordansoares
 Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
-Tested up to: 6.7
-Stable tag: 1.3.8.8
+Tested up to: 6.8
+Stable tag: 1.3.8.9
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -69,15 +69,15 @@ Check out the available features in the **PRO version**.
 12. **Custom Filename** - Define custom filename patterns: *( {filename}, {cf7-field-name}, {ip_address}, {random}, {post_id}, {post_slug}, etc. )*
 13. **Color Options** - Customize colors for **file size**, **progress bar**, **filename**, and more.
 14. **Prevent Duplicate** - Disable button to prevent duplicate submissions.
-15. **Image preview in email** - Display image previews in email notifications.
-16. **Custom Theme** - Switch between **"Dark"** or **"Light"** themes.
-17. **Form Entries** - Store form entries in WordPress admin.
-18. **Seamless Remote Storage Integration** - 🔥 Supports: **OneDrive**, **Google Drive**, **Amazon S3**, **Dropbox**, **FTP**.
-19. **Image Size Validation** - Ensure images meet required width and height.
-20. **Image Resize** - Supports image resizing (e.g., 800x800). *(**Standard** Version Only)*
-21. **Optimize Image** - Optimize images after resizing. *(**Standard** Version Only)*
-22. **Security** - Ensure security with regular updates, vulnerability scans, and threat protection.
-23. **Optimized Code & Performance** – Improve speed and efficiency.
+15. **Custom Theme** - Switch between **"Dark"** or **"Light"** themes.
+16. **Form Entries** - Store form entries in WordPress admin.
+17. **Seamless Remote Storage Integration**
+	🔥 Supports: **OneDrive**, **Google Drive**, **Amazon S3**, **Dropbox**, **FTP**.
+18. **Image Size Validation** - Ensure images meet required width and height.
+19. **Image Resize** - Supports image resizing (e.g., 800x800). *(**Standard** Version Only)*
+20. **Optimize Image** - Optimize images after resizing. *(**Standard** Version Only)*
+21. **Security** - Ensure security with regular updates, vulnerability scans, and threat protection.
+22. **Optimized Code & Performance** – Improve speed and efficiency.
 
 **Pro version** is also compatible with:
 
@@ -91,7 +91,7 @@ You can get [PRO Version here](https://www.codedropz.com/purchase-plugin/)!
 
 [youtube https://youtu.be/PoQA4KmIETA?si=udM-70n6l4lsQAfp]
 
-### Other Plugin You May Like
+### Other Plugins You May Like
 
 * [Drag & Drop Multiple File Upload - WPForms](https://www.codedropz.com/drag-drop-file-uploader-wpforms/)
 An extension for **WPForms** - Transform your simple file upload into beautiful **"Drag & Drop Multiple File Upload"**.
@@ -178,6 +178,11 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+
+= 1.3.8.9 =
+- Check: Verified compatibility with WordPress 6.8.
+- Security: Enhanced security measures.
+- Bug Fix: Fixed an issue with file deletion from PHAR archive when associated Flamingo entries are deleted.
 
 = 1.3.8.8 =
 - Fixes - Fixed Vulnerability issues reported by Phat RiO - BlueRock (via Wordfence)

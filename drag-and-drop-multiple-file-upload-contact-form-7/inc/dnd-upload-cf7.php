@@ -139,29 +139,37 @@
 		$page      = get_post( $post_id );
 
 		if ( $post_type == 'flamingo_inbound' ) {
-			preg_match_all( '/(.*?)(\/'.wpcf7_dnd_dir.'\/wpcf7-files\/.*$)/m', $page->post_content, $matches );
+			preg_match_all( '/https?:\/\/[^\'"\s]+\/'.preg_quote(wpcf7_dnd_dir, '/').'\/wpcf7-files\/[^\'"\s]+/i', $page->post_content, $matches );
+
 			if ( $matches[0] && count( $matches[0] ) > 0 ) {
-				foreach ( $matches[0] as $files ) {
+				foreach ( $matches[0] as $file_url ) {
 
 					// Convert url to dir
-					$file = str_replace( site_url() . '/', wp_normalize_path( ABSPATH ), $files );
+					$file = str_replace( site_url() . '/', wp_normalize_path( ABSPATH ), $file_url );
+
+					// Only allowed local paths. (skip: phar://, file://)
+					if ( parse_url( $file, PHP_URL_SCHEME ) ) {
+						continue;
+					}
 
 					// Check if it's a regular file.
-					if ( is_file( $file ) ) {
-
-						// Extract and sanitize the filename
-						$file_path = dirname( $file ) . '/' . sanitize_file_name( wp_basename( $file ) );
-
-						// Prevent traversal attack
-						$real_path   = realpath( $file_path );
-						$wp_dir      = wp_get_upload_dir(); //WordPress dir
-						$uploads_dir = wp_normalize_path( realpath( $wp_dir['basedir'] ). '/'. wpcf7_dnd_dir );
-
-						// Check if the file exists and is within the uploads directory
-						if ( $real_path && file_exists( $real_path ) && strpos( $real_path, $uploads_dir ) === 0 ) {
-							wp_delete_file( $real_path );
-						}
+					if ( ! file_exists( $file ) || ! is_file( $file ) ) {
+						continue;
 					}
+
+					// Extract and sanitize the filename
+					$file_path = dirname( $file ) . '/' . sanitize_file_name( wp_basename( $file ) );
+
+					// Prevent traversal attack
+					$real_path   = realpath( $file_path );
+					$wp_dir      = wp_get_upload_dir(); //WordPress dir
+					$uploads_dir = wp_normalize_path( realpath( $wp_dir['basedir'] ). '/'. wpcf7_dnd_dir );
+
+					// Check if the file exists and is within the uploads directory
+					if ( $real_path && file_exists( $real_path ) && strpos( $real_path, $uploads_dir ) === 0 ) {
+						wp_delete_file( $real_path );
+					}
+
 				}
 			}
 		}
@@ -427,6 +435,9 @@
 
 		// get all form fields
 		$fields = $form->scan_form_tags();
+
+		// Default counter
+		$_mail = isset( $_mail ) ? $_mail : 0;
 
 		// Display file links in email (no attachment)
 		if( dnd_cf7_settings('drag_n_drop_mail_attachment') == 'yes' ) {
