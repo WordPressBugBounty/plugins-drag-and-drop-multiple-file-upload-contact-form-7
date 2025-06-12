@@ -4,7 +4,7 @@ Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
 Tested up to: 6.8
-Stable tag: 1.3.8.9
+Stable tag: 1.3.9.0
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -178,6 +178,9 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+= 1.3.9.0 =
+- Security: Fixed security issues reported by Wordfence "Remote Code Execution via PHAR File Upload if changing the filename something like poc.&#112;har".
+- Bug Fix: Modified script for compatibility on "conditional field for Contact Form 7".
 
 = 1.3.8.9 =
 - Check: Verified compatibility with WordPress 6.8.

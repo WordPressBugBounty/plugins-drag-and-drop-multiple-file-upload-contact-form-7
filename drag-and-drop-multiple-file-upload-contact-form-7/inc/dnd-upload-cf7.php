@@ -689,14 +689,21 @@
 		// Match pattern
 		preg_match_all( '/'. $regex .'/s', $cf7_post->post_content, $matches );
 
-		if( array_key_exists( 3, $matches )) {
-			foreach( $matches[3] as $index => $group_name ) {
-				$name = array_filter( explode(" ", $group_name ) );
-				preg_match('/\[mfile[*|\s].*?\]/', $matches[0][$index], $file_matches );
-				if( $file_matches ) {
-					$field_name = shortcode_parse_atts( $file_matches[0] );
-					$field_name = preg_replace( '/[^a-zA-Z0-9-_]/','', $field_name[1] );
-					$groups[ $field_name ] = $name[1];
+		if( array_key_exists( 0, $matches ) && isset( $matches[3] ) ) {
+			foreach( $matches[0] as $i => $groups_fields ) {
+				$group_name = shortcode_parse_atts( $matches[3][ $i ] ); // get group name [0]=group_name [1]=class_name
+				preg_match_all('/\[mfile[*|\s].*?\]/', $groups_fields, $file_matches );
+				if ( $file_matches && isset( $file_matches[0] ) ) {
+					foreach ( $file_matches[0] as $file_match ) {
+						$field_name = shortcode_parse_atts( $file_match );
+						if ( isset( $group_name[0] ) && isset( $field_name[1] ) ) {
+							if ( strpos( $field_name[1], ']' ) !== false ) {
+								$groups[ $group_name[0] ][] = str_replace( ']', '', $field_name[1] );
+							} else {
+								$groups[ $group_name[0] ][] = $field_name[1];
+							}
+						}
+					}
 				}
 			}
 		}
@@ -728,19 +735,19 @@
 		){
 
 			$hidden_groups = json_decode( stripslashes( $_POST['_wpcf7cf_hidden_groups'] ) );
-			$form_id = WPCF7_ContactForm::get_current()->id();
-			$group_fields = dnd_cf7_conditional_fields( $form_id );
+			$form_id       = WPCF7_ContactForm::get_current()->id();
+			$group_fields  = dnd_cf7_conditional_fields( $form_id );
 
-			if( is_null( $multiple_files ) && $tag->is_required() ) {
-				if( isset( $group_fields[ $name ] ) && ! in_array( $group_fields[ $name ], $hidden_groups ) ) {
-					$result->invalidate( $tag, wpcf7_get_message( 'invalid_required' ) );
-				}elseif( ! array_key_exists( $name, $group_fields ) ) {
-					$result->invalidate( $tag, wpcf7_get_message( 'invalid_required' ) );
+			if ( is_null( $multiple_files ) && $tag->is_required() && $group_fields ) {
+				foreach ( $group_fields as $group_name => $fields ) {
+					//note: if group_name is not in hidden groups then proceed with validation.
+					if ( ! in_array( $group_name, $hidden_groups ) && in_array( $name, $fields ) ) {
+						$result->invalidate( $tag, wpcf7_get_message( 'invalid_required' ) );
+						break;
+					}
 				}
 				return $result;
 			}
-
-			return $result;
 		}
 
 		// Check if we have files or if it's empty
@@ -902,12 +909,12 @@
 		// Create type pattern for anti script
 		$file_type_pattern = dnd_upload_cf7_filetypes( $supported_type );
 
-		// Get file extension
-        $extension = strtolower( pathinfo( sanitize_file_name( $file['name'] ), PATHINFO_EXTENSION ) );
-
         // Create file name
 		$filename = wp_basename( $file['name'] );
 		$filename = wpcf7_canonicalize( $filename, 'as-is' );
+
+		// Get file extension
+        $extension = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
 
         // Check unique name
         $filename = wp_unique_filename( $path['upload_dir'], $filename );
