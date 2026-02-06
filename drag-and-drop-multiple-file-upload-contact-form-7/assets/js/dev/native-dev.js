@@ -244,11 +244,11 @@
                     // Process ajax upload
                     var xhr = new XMLHttpRequest();
 
-                    // Get progress bar element
-                    var progressBar = document.getElementById( progressBarID );
-                    var progressElement = progressBar.querySelector('.dnd-progress-bar');
-                    var detailsElement = progressBar.querySelector('.dnd-upload-details');
-                    var submitButton = form_handler.querySelector('input[type="submit"], button[type="submit"]');
+                    // Get progress bar element [changes 2026]
+                    let progressBar = document.getElementById( progressBarID );
+                    let progressElement = progressBar.querySelector('.dnd-progress-bar');
+                    let detailsElement = progressBar.querySelector('.dnd-upload-details');
+                    let submitButton = form_handler.querySelector('input[type="submit"], button[type="submit"]');
 
                     xhr.open(form_handler.getAttribute('method'), options.ajax_url);
                     xhr.onreadystatechange = function() {
@@ -391,7 +391,7 @@
             // Disable button
             disableBtn : function( BtnOJB ) {
                 if( BtnOJB  ) {
-                    BtnOJB.classList.add('disable');
+                    BtnOJB.classList.add('disabled');
                     BtnOJB.disabled = true;
                 }
             }
@@ -559,6 +559,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         setTimeout(function(){
                             const submitButton = form.querySelector('button[type=submit], input[type=submit]');
                             if( submitButton ){
+								submitButton.classList.remove('disabled');
                                 submitButton.removeAttribute('disabled');
                             }
                         }, 1);

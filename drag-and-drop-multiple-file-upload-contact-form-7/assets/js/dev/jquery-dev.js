@@ -331,7 +331,7 @@
 				// Disable button
 				disableBtn : function( BtnOJB ) {
 					if( BtnOJB.length > 0 ) {
-						BtnOJB.addClass('disable').prop( "disabled", true );
+						BtnOJB.addClass('disabled').prop( "disabled", true );
 					}
 				}
 			};
@@ -456,7 +456,7 @@ jQuery(document).ready(function($){
 					setTimeout(function(){
                         const buttonSubmit = $('input[type="submit"], button[type="submit"]', $form);
                         if( buttonSubmit ){
-                            buttonSubmit.removeAttr('disabled');
+                            buttonSubmit.removeClass('disabled').removeAttr('disabled');
                         }
                     }, 1);
 				}

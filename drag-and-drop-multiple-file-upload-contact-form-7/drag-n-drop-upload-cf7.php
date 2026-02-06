@@ -6,7 +6,7 @@
 	* Description: This simple plugin create Drag & Drop or choose Multiple File upload in your Confact Form 7 Forms.
 	* Text Domain: drag-and-drop-multiple-file-upload-contact-form-7
 	* Domain Path: /languages
-	* Version: 1.3.9.1
+	* Version: 1.3.9.5
 	* Author: Glen Don L. Mongaya
 	* Author URI: http://codedropz.com
 	* License: GPL2
@@ -21,7 +21,7 @@
 	define( 'dnd_upload_cf7', true );
 
 	/**  Define plugin Version */
-	define( 'dnd_upload_cf7_version', '1.3.9.1' );
+	define( 'dnd_upload_cf7_version', '1.3.9.5' );
 
 	/**  Define constant Plugin Directories  */
 	define( 'dnd_upload_cf7_directory', untrailingslashit( dirname( __FILE__ ) ) );
@@ -30,6 +30,18 @@
 	if ( ! defined('wpcf7_dnd_dir') ) {
 		define( 'wpcf7_dnd_dir', 'wp_dndcf7_uploads' );
 	}
+
+	// Activation setup cron.
+	register_activation_hook( __FILE__, function () {
+		if ( ! wp_next_scheduled( 'dnd_cf7_daily_event' ) ) {
+			wp_schedule_event( time(), 'hourly', 'dnd_cf7_daily_event' );
+		}
+	});
+
+	// Deactivate clear cron.
+	register_deactivation_hook( __FILE__, function () {
+		wp_clear_scheduled_hook( 'dnd_cf7_daily_event' );
+	});
 
 	// require plugin core file
 	require_once( dnd_upload_cf7_directory .'/inc/dnd-upload-cf7.php' );

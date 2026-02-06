@@ -3,8 +3,8 @@ Contributors: glenwpcoder, yordansoares
 Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
-Tested up to: 6.8
-Stable tag: 1.3.9.1
+Tested up to: 6.9
+Stable tag: 1.3.9.5
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -47,7 +47,7 @@ To **adjust** or **disable** the auto-deletion feature, we suggest upgrading to 
 
 ### ⭐ Premium Features ⭐
 
-Check out the available features in the **PRO version**.
+Check out the available features in the [**PRO version**](https://www.codedropz.com/drag-drop-multiple-file-upload-for-contact-form-7/#shop).
 
 1. **Upload Large File** - Supports uploading large files.
 2. **Image Preview** - Displays thumbnails for images.
@@ -85,7 +85,7 @@ Check out the available features in the **PRO version**.
 * Database for Contact Form 7- Ninja
 * Advanced Contact form 7 DB – Vsourz Digital
 
-You can get [PRO Version here](https://www.codedropz.com/purchase-plugin/)!
+You can get [PRO Version here](https://www.codedropz.com/drag-drop-multiple-file-upload-for-contact-form-7/#shop)!
 
 **PRO VERSION - PLUGIN OVERVIEW**
 
@@ -93,11 +93,14 @@ You can get [PRO Version here](https://www.codedropz.com/purchase-plugin/)!
 
 ### Other Plugins You May Like
 
-* [Drag & Drop Multiple File Upload - WPForms](https://www.codedropz.com/drag-drop-file-uploader-wpforms/)
-An extension for **WPForms** - Transform your simple file upload into beautiful **"Drag & Drop Multiple File Upload"**.
+* [Easy File Upload & Approval](https://wordpress.org/plugins/easy-file-upload-approval/)
+**Easy File Upload & Approval** - A simple file management plugin that lets users effortlessly upload and submit files for review through a clean and simple drag-and-drop interface.
 
 * [Drag & Drop Multiple File Upload - WooCommerce](https://wordpress.org/plugins/drag-and-drop-multiple-file-upload-for-woocommerce/)
 An extension for **WooCommerce** - Transform your simple file upload into beautiful **"Drag & Drop Multiple File Upload"**.
+
+* [Drag & Drop Multiple File Upload - WPForms](https://www.codedropz.com/drag-drop-file-uploader-wpforms/)
+An extension for **WPForms** - Transform your simple file upload into beautiful **"Drag & Drop Multiple File Upload"**.
 
 == Frequently Asked Questions ==
 
@@ -178,6 +181,24 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+= 1.3.9.5 =
+- Hot Fix: Minor spelling mistakes.
+
+= 1.3.9.4 =
+- Fixes: Change shutdown hook to cron events in order to fix this issue. [Support Link](https://wordpress.org/support/topic/commands-out-of-sync-mysql-error-during-shutdown-hook-v1-3-9-3-2/)
+- Fixes: Move the js cookie generation from wp_footer hook to wp_add_inline_script. [Support Link](https://wordpress.org/support/topic/enqueueing-of-javascript-is-not-complaint-csp-conflict/)
+- Improvement: Minor fixes and improvement.
+
+= 1.3.9.3 =
+- Security: Fixed vulnerability issues reported by WordFence (reported by shark3y) - unauthorized modification of data due to a missing ownership check in the dnd_codedropz_upload_delete() function.
+- Security: Fixed an unauthenticated limited arbitrary file upload issue allowing .phar and .svg files when using blacklist mode with file types set to *. (by WordFence via andrea bocchetti)
+
+= 1.3.9.2 =
+- Fixed - File Upload required fields conflicts with Conditional Fields for CF7.
+- Fixed - Typo error in Cf7 field editor.
+- Fixed - Multiple errors showing in upload field.
+- Check - WordPress 6.8.3 compatibility.
+
 = 1.3.9.1 =
 - Fixed : Security issues related to cookie (Thanks to WordFence)
 - Bug : Fixed or Replace crypto.randomUUID() error on non https. [Support Link](https://wordpress.org/support/topic/crypto-randomuuid-error/)
@@ -248,7 +269,3 @@ Added some useful features.
 
 = 1.2.4 =
 Added new features and fixes.
-
-== Donations ==
-
-Would you like to support the advancement of this plugin? [Donate](http://codedropz.com/donation)
