@@ -2,7 +2,7 @@
  * CodeDropz Uploader
  * Copyright 2018 Glen Mongaya
  * CodeDrop Drag&Drop Uploader
- * @version 1.3.8.7
+ * @version 1.3.9.6
  * @author CodeDropz, Glen Don L. Mongaya
  * @license The MIT License (MIT)
  */
@@ -32,27 +32,29 @@
 				on_success			: ''
 			}, settings);
 
+			// Generate random string
+			const generateRandomFolder = function( length = 20 ) {
+				const bytes = new Uint8Array(16);
+				crypto.getRandomValues(bytes);
+				bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+				bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
+				const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+				return hex.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+			}
+
 			// Get storage name
 			var dataStorageName = input.data('name') + '_count_files';
 
 			// File Counter
 			localStorage.setItem( dataStorageName, 1);
 
-			// Generate random string
-			const generateRandomFolder = function( length = 20 ) {
-				const characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-				const charactersLength = characters.length;
-				let randomString = '';
+			// Get unique id from local storage.
+			var sessionID = dnd_upload_cf7_unique_id();
 
-				// Generate a random string
-				for (let i = 0; i < length; i++) {
-					const randomIndex = Math.floor(Math.random() * charactersLength);
-					randomString += characters[randomIndex];
-				}
-
-				// Append the current timestamp (in seconds)
-				const timestamp = Math.floor(Date.now() / 1000); // Get Unix timestamp in seconds
-				return randomString + timestamp;
+			// Unique upload session_id
+			if ( ! sessionID ) {
+				sessionID = generateRandomFolder();
+				localStorage.setItem( 'dnd_wpcf7_session_id', JSON.stringify({ value: sessionID, savedAt: Date.now() }) );
 			}
 
 			// Template Container
@@ -151,7 +153,7 @@
 				// CF7 - upload field name & cf7 id
 				formData.append('form_id', input.data('id'));
 				formData.append('upload_name', input.data('name'));
-				formData.append('upload_folder', input.data('random-id') );
+				formData.append('upload_folder', sessionID );
 
                 // black list file types
                 if( input.data('black-list') ){
@@ -341,10 +343,11 @@
 		$(document).on("click",'.dnd-icon-remove',function(e){
 			e.preventDefault();
 			var _self = $(this),
-				_dnd_status = _self.parents('.dnd-upload-status'),
-				_parent_wrap = _self.parents('.codedropz-upload-wrapper'),
+				_dnd_status       = _self.parents('.dnd-upload-status'),
+				_parent_wrap      = _self.parents('.codedropz-upload-wrapper'),
 				removeStorageData = _self.parent('a').attr('data-storage'),
-				storageCount = Number( localStorage.getItem( removeStorageData ) );
+				storageCount      = Number( localStorage.getItem( removeStorageData ) ),
+				sessionId         = dnd_upload_cf7_unique_id();
 
 			// If file upload is in progress don't delete
 			if( _dnd_status.hasClass('in-progress')) {
@@ -362,9 +365,10 @@
 
 			// Request ajax image delete
 			var delData = {
-				path 		: _dnd_status.find('input[type="hidden"]').val(),
-				action 		: 'dnd_codedropz_upload_delete',
-				security 	: dnd_cf7_uploader.ajax_nonce
+				path 		  : _dnd_status.find('input[type="hidden"]').val(),
+				action 		  : 'dnd_codedropz_upload_delete',
+				security 	  : dnd_cf7_uploader.ajax_nonce,
+				upload_folder : sessionId
 			};
 
 			$.post( settings.ajax_url, delData, function(response) {
@@ -393,6 +397,25 @@
 	}; // end fn.function
 
 }( jQuery ));
+
+// Get unique id. (reset after 24hours)
+function dnd_upload_cf7_unique_id() {
+	const item = localStorage.getItem('dnd_wpcf7_session_id');
+	if ( ! item ) {
+		return null;
+	}
+
+	// Parse item
+	const data = JSON.parse( item );
+
+	// Compare date
+	if ( Date.now() - data.savedAt > ( 24 * 60 * 60 * 1000 ) ) {
+		localStorage.removeItem('dnd_wpcf7_session_id');
+		return null;
+	}
+
+	return data.value;
+}
 
 jQuery(document).ready(function($){
 

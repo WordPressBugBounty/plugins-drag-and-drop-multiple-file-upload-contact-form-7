@@ -16,7 +16,6 @@
 
 	add_action( 'wpcf7_init', 'dnd_cf7_upload_add_form_tag_file' );
 	add_action( 'wpcf7_enqueue_scripts', 'dnd_cf7_scripts' );
-	add_action( 'wpcf7_enqueue_scripts', 'dnd_cf7_cookie_scripts', 50 );
 
 	// Hook on plugins loaded
 	add_action('plugins_loaded','dnd_cf7_upload_plugins_loaded');
@@ -73,9 +72,7 @@
 
 	// Return created cookie with unique id.
 	function dnd_cf7_get_unique_id() {
-		if ( isset( $_COOKIE['wpcf7_guest_user_id'] ) ) {
-			return $_COOKIE['wpcf7_guest_user_id'];
-		}
+		print_r( $_POST );
 	}
 
     // Add links to settings
@@ -203,9 +200,6 @@
 				if( $field->basetype == 'mfile' && isset( $posted_data[$field_name] ) && ! empty( $posted_data[$field_name] ) ) {
 					if ( is_array( $posted_data ) ) {
 						foreach( $posted_data[$field_name] as $key => $file ) {
-							if ( strpos( dirname($file), 'wpcf7-files' ) !== false ) {
-								$file = wp_basename( $file ); // remove duplicate path "/12/file.jpg" to just "/file.jpg"
-							}
 							$posted_data[$field_name][$key] = trailingslashit( $uploads_dir['upload_url'] ) . $file;
 						}
 					}
@@ -252,9 +246,9 @@
 	}
 
 	// Get folder path
-	function dnd_get_upload_dir( $dir = false ) {
+	function dnd_get_upload_dir( $dir = '' ) {
 		$upload      = wp_upload_dir();
-		$uploads_dir = wpcf7_dnd_dir . '/wpcf7-files';
+		$uploads_dir = wpcf7_dnd_dir . '/wpcf7-files'; // ie: "/wp_dndcf7_uploads/wpcf7-files"
 
 		// Send file as links is enabled.
 		if ( dnd_cf7_settings('drag_n_drop_mail_attachment') == 'yes' ) {
@@ -262,31 +256,33 @@
 		}
 
 		// Setup random/unique folder, only created if user uploading.
-		if ( true === $dir ) {
-			$unique_id = dnd_cf7_get_unique_id();
+		if ( $dir ) {
+			$unique_id = sanitize_file_name( $dir );
 			if ( ! empty( $unique_id ) ) {
-				$unique_id = preg_replace( '/[^a-zA-Z0-9_-]/', '', $unique_id );
-				if ( '' !== $unique_id ) {
-					$uploads_dir = trailingslashit( $uploads_dir ) . sanitize_file_name( $unique_id );
-				}
+				$unique_id   = preg_replace( '/[^a-zA-Z0-9_-]/', '', $unique_id );
+				$uploads_dir = trailingslashit( $uploads_dir ) . $unique_id;
 			}
 		}
 
+		// Get full dir and url
+		$full_dir = wp_normalize_path( trailingslashit( $upload['basedir'] ) . $uploads_dir );
+		$full_url = trailingslashit( $upload['baseurl'] ) . $uploads_dir;
+
 		// Create directory if not exists.
-		if ( ! is_dir( trailingslashit( $upload['basedir'] ) . $uploads_dir ) ) {
-			wp_mkdir_p( trailingslashit( $upload['basedir'] ) . $uploads_dir );
-            chmod( trailingslashit( $upload['basedir'] ) . $uploads_dir, 0755 );
+		if ( ! is_dir( $full_dir ) ) {
+			wp_mkdir_p( $full_dir );
+            @chmod( $full_dir, 0755 );
 		}
 
 		// Make sure directory exist before returning
-		if( file_exists( trailingslashit( $upload['basedir'] ) . $uploads_dir ) ) {
+		if( file_exists( $full_dir ) ) {
 			return array(
-				'upload_dir'	=>	trailingslashit( $upload['basedir'] ) . $uploads_dir,
-				'upload_url'	=>	trailingslashit( $upload['baseurl'] ) . $uploads_dir
+				'upload_dir'	=>	$full_dir,
+				'upload_url'	=>	$full_url
 			);
 		}
 
-		return trailingslashit( $upload['basedir'] ) . $uploads_dir;
+		return $full_dir;
 	}
 
 	// Clean up directory - From Contact Form 7
@@ -583,28 +579,6 @@
 
 		// enque style
 		wp_enqueue_style( 'dnd-upload-cf7', plugins_url ('/assets/css/dnd-upload-cf7.css', dirname(__FILE__) ), '', $version );
-	}
-
-	// Add inline js for cookie script.
-	function dnd_cf7_cookie_scripts() {
-		wp_add_inline_script( 'codedropz-uploader',
-			"
-			function dnd_cf7_generateUUIDv4() {
-				const bytes = new Uint8Array(16);
-				crypto.getRandomValues(bytes);
-				bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-				bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
-				const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-				return hex.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
-			}
-
-			document.addEventListener('DOMContentLoaded', function() {
-				if ( ! document.cookie.includes('wpcf7_guest_user_id')) {
-					document.cookie = 'wpcf7_guest_user_id=' + dnd_cf7_generateUUIDv4() + '; path=/; max-age=' + (12 * 3600) + '; samesite=Lax';
-				}
-			});
-			"
-		);
 	}
 
 	// Generate tag
@@ -912,7 +886,8 @@
 		}
 
 		// Get upload dir
-		$path = dnd_get_upload_dir( true ); // ok
+		$folder = isset( $_POST['upload_folder'] ) ? sanitize_text_field( $_POST['upload_folder'] ) : null;
+		$path   = dnd_get_upload_dir( $folder ); // ok
 
 		// input type file 'name'
 		$name = 'upload-file';
@@ -938,17 +913,18 @@
         // Create file name
 		$filename = wp_basename( $file['name'] );
 		$filename = wpcf7_canonicalize( $filename, 'as-is' );
+		$filename = sanitize_file_name( $filename ); // sanitize filename
+
+		// Check unique name
+        $filename = wp_unique_filename( $path['upload_dir'], $filename );
 
 		// Get file extension
         $extension = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
 
-        // Check unique name
-        $filename = wp_unique_filename( $path['upload_dir'], $filename );
-
         // Validate File Types (if supported type is set to "*")
 		if ( $supported_type == '*' ) {
-			$file_type          = wp_check_filetype( $file['name'] );
-			$not_allowed_ext    = array( 'phar', 'svg',  ); // not allowed file type.
+			$file_type          = wp_check_filetype( $filename );
+			$not_allowed_ext    = array( 'phar', 'svg', 'php5', 'php7', 'php8' ); // not allowed file type.
 			$type_ext           = ( $file_type['ext'] !== false ? strtolower( $file_type['ext'] ) : $extension );
 			$error_invalid_type = dnd_cf7_settings('drag_n_drop_error_invalid_file') ?: dnd_cf7_error_msg('invalid_type');
 
@@ -960,19 +936,17 @@
 		}
 
 		// validate file type
-		if ( ( ! preg_match( $file_type_pattern, $file['name'] ) || ! dnd_cf7_validate_type( $extension, $supported_type ) ) && $supported_type != '*' ) {
+		if ( ( ! preg_match( $file_type_pattern, $filename ) || ! dnd_cf7_validate_type( $extension, $supported_type ) ) && $supported_type != '*' ) {
 		    wp_send_json_error( dnd_cf7_settings('drag_n_drop_error_invalid_file') ? dnd_cf7_settings('drag_n_drop_error_invalid_file') : dnd_cf7_error_msg('invalid_type') );
 		}
 
         // validate mime type
-        if( $supported_type && $supported_type != '*' ){
+        if ( $supported_type && $supported_type != '*' ){
 
             // wheather if we validate mime type
             $validate_mime = apply_filters('dnd_cf7_validate_mime', false );
-
-            if( $validate_mime ){
-
-                if( ! function_exists('wp_check_filetype_and_ext') ){
+            if ( $validate_mime ) {
+                if ( ! function_exists('wp_check_filetype_and_ext') ){
                     require_once ABSPATH .'wp-admin/includes/file.php';
                 }
 
@@ -980,20 +954,21 @@
                 $wp_filetype = wp_check_filetype_and_ext( $tmp_file, $file['name'] ); //[ext, type]
                 $valid_mimes = explode('|', $supported_type); // array[png, jpg]
 
-                if( empty( $wp_filetype['type'] ) || empty( $wp_filetype['ext'] ) || ! in_array( $wp_filetype['ext'], $valid_mimes ) ){
+                if ( empty( $wp_filetype['type'] ) || empty( $wp_filetype['ext'] ) || ! in_array( $wp_filetype['ext'], $valid_mimes ) ){
                     wp_send_json_error( dnd_cf7_settings('drag_n_drop_error_invalid_file') ? dnd_cf7_settings('drag_n_drop_error_invalid_file') : dnd_cf7_error_msg('invalid_type') );
                 }
             }
         }
 
 		// validate file size limit
-		if( isset( $size_limit["$cf7_upload_name"] ) && $file['size'] > $size_limit["$cf7_upload_name"] ) {
+		if ( isset( $size_limit["$cf7_upload_name"] ) && $file['size'] > $size_limit["$cf7_upload_name"] ) {
 			wp_send_json_error( dnd_cf7_settings('drag_n_drop_error_files_too_large') ? dnd_cf7_settings('drag_n_drop_error_files_too_large') : dnd_cf7_error_msg('large_file') );
 		}
 
 		// Check if string is ascii then proceed with antiscript function ( remove or clean filename )
-		if( dnd_cf7_check_ascii( $filename ) ){
-			$filename = wpcf7_antiscript_file_name( $filename );
+		$ascii_name = dnd_cf7_remove_icons( $filename );
+		if ( dnd_cf7_check_ascii( $ascii_name ) ) {
+			$filename = wpcf7_antiscript_file_name( $ascii_name );
 		}
 
 		// Randomize filename
@@ -1036,8 +1011,24 @@
 		die;
 	}
 
+	// Force to remove emoji in the filename.
+	function dnd_cf7_remove_icons( $filename ) {
+		return preg_replace(
+			'/[\x{1F000}-\x{1FAFF}'
+			. '\x{2600}-\x{27BF}'
+			. '\x{1F1E6}-\x{1F1FF}'
+			. '\x{200D}'
+			. '\x{FE00}-\x{FE0F}'
+			. '\x{1F3FB}-\x{1F3FF}]/u',
+			'',
+			$filename
+		);
+	}
+
 	// Check if a string is ASCII.
 	function dnd_cf7_check_ascii( $string ) {
+		$string = sanitize_file_name( $string );
+
 		if ( function_exists( 'mb_check_encoding' ) ) {
 			if ( mb_check_encoding( $string, 'ASCII' ) ) {
 				return true;
@@ -1077,17 +1068,17 @@
             }
 
 			// Validate path if it's match on the current folder
-			$unique_id      = dnd_cf7_get_unique_id();
+			$unique_id      = isset( $_POST['upload_folder'] ) ? sanitize_file_name( $_POST['upload_folder'] ) : '';
 			$current_folder = trim( dirname( $path ) );
 			$file_name      = wp_basename( $path ); // added Aug 2025
-			$current_path   = $dir['upload_dir'] .'/'. sanitize_file_name( $unique_id ) .'/'. $file_name;
+			$current_path   = $dir['upload_dir'] .'/'. $unique_id .'/'. $file_name;
 
 			// Validate unique id.
 			if ( empty( $unique_id ) || ! preg_match( '/^(?!\.{1,2}$)[a-zA-Z0-9_-]+$/', (string) $unique_id ) ) {
 				wp_send_json_error( 'Error: Invalid Request.' );
 			}
 
-			// Validate cookie and current_folder to ensure they match.
+			// Validate unique id and current_folder to ensure they match.
 			if ( ( $unique_id !== $current_folder ) || ! file_exists( $current_path ) || preg_match( '#\.\.[/\\\\]#', $path ) ) {
 				wp_send_json_error( 'Error: Unauthorized Request!' );
 			}
@@ -1144,7 +1135,7 @@
 
 	// list of not allowed extensions.
 	function dnd_cf7_not_allowed_ext() {
-		return array( 'svg', 'phar', 'php', 'php3','php4','phtml','exe','script', 'app', 'asp', 'bas', 'bat', 'cer', 'cgi', 'chm', 'cmd', 'com', 'cpl', 'crt', 'csh', 'csr', 'dll', 'drv', 'fxp', 'flv', 'hlp', 'hta', 'htaccess', 'htm', 'htpasswd', 'inf', 'ins', 'isp', 'jar', 'js', 'jse', 'jsp', 'ksh', 'lnk', 'mdb', 'mde', 'mdt', 'mdw', 'msc', 'msi', 'msp', 'mst', 'ops', 'pcd', 'pif', 'pl', 'prg', 'ps1', 'ps2', 'py', 'rb', 'reg', 'scr', 'sct', 'sh', 'shb', 'shs', 'sys', 'swf', 'tmp', 'torrent', 'url', 'vb', 'vbe', 'vbs', 'vbscript', 'wsc', 'wsf', 'wsf', 'wsh' );
+		return array( 'html', 'svg', 'phar', 'php', 'php3','php4','pht', 'php5', 'php7', 'php8', 'xhtml','shtml', 'mhtml', 'dhtml', 'phtml','exe','script', 'app', 'asp', 'bas', 'bat', 'cer', 'cgi', 'chm', 'cmd', 'com', 'cpl', 'crt', 'csh', 'csr', 'dll', 'drv', 'fxp', 'flv', 'hlp', 'hta', 'htaccess', 'htm', 'htpasswd', 'inf', 'ins', 'isp', 'jar', 'js', 'jse', 'jsp', 'ksh', 'lnk', 'mdb', 'mde', 'mdt', 'mdw', 'msc', 'msi', 'msp', 'mst', 'ops', 'pcd', 'pif', 'pl', 'prg', 'ps1', 'ps2', 'py', 'rb', 'reg', 'scr', 'sct', 'sh', 'shb', 'shs', 'sys', 'swf', 'tmp', 'torrent', 'url', 'vb', 'vbe', 'vbs', 'vbscript', 'wsc', 'wsf', 'wsf', 'wsh' );
 	}
 
 	// Add more validation for file extension
@@ -1425,6 +1416,7 @@
 		return $default_value;
 	}
 
+	// Get the default Media max upload size.
 	function dnd_cf7_max_upload() {
 		$max    = wp_max_upload_size();
 		$max_mb = $max / 1024 / 1024;
@@ -1434,28 +1426,6 @@
 		}
 
 		return round( $max_mb, 2 ) . ' MB';
-	}
-
-	// Generate cookie (Cookie expiration 12 Hours)
-	function dnd_cf7_generate_cookie() {
-	?>
-		<script type="text/javascript">
-			function dnd_cf7_generateUUIDv4() {
-				const bytes = new Uint8Array(16);
-				crypto.getRandomValues(bytes);
-				bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-				bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
-				const hex = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
-				return hex.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5");
-			}
-
-			document.addEventListener("DOMContentLoaded", function() {
-				if ( ! document.cookie.includes("wpcf7_guest_user_id")) {
-					document.cookie = "wpcf7_guest_user_id=" + dnd_cf7_generateUUIDv4() + "; path=/; max-age=" + (12 * 3600) + "; samesite=Lax";
-				}
-			});
-		</script>
-	<?php
 	}
 
 	// Get current language (Polylang & WPML)
