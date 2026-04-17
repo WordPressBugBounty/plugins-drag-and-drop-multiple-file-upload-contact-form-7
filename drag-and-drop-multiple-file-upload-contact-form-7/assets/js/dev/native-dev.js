@@ -2,7 +2,7 @@
  * CodeDropz Uploader
  * Copyright 2018 Glen Mongaya
  * CodeDrop Drag&Drop Uploader
- * @version 1.3.9.6
+ * @version 1.3.9.7
  * @author CodeDropz, Glen Don L. Mongaya
  * @license The MIT License (MIT)
  */
@@ -63,11 +63,14 @@
 
 		// Get unique id from local storage.
 		var sessionID = dnd_upload_cf7_unique_id();
+		var folderToken = sessionID ? localStorage.getItem( 'dnd_cf7_token_' + sessionID ) : null;
 
-		// Unique upload session_id
-		if ( ! sessionID ) {
-			sessionID = generateRandomFolder();
+		// Unique upload session_id & token
+		if ( ! sessionID || ! folderToken ) {
+			sessionID   = generateRandomFolder();
+			folderToken = generateRandomFolder(); // Generate folder token if not exists.
 			localStorage.setItem( 'dnd_wpcf7_session_id', JSON.stringify({ value: sessionID, savedAt: Date.now() }) );
+			localStorage.setItem( 'dnd_cf7_token_' + sessionID, folderToken );
 		}
 
         // Template Container
@@ -165,7 +168,6 @@
 
             // Append file
             //formData.append('supported_type', options.supported_type ); @note : removed due Vulnerability
-            //formData.append('size_limit', options.max_upload_size );
             formData.append('action', 'dnd_codedropz_upload' );
             formData.append('type', action );
             formData.append('security', dnd_cf7_uploader.ajax_nonce );
@@ -174,6 +176,7 @@
             formData.append('form_id', input.dataset.id);
             formData.append('upload_name', input.dataset.name);
 			formData.append('upload_folder', sessionID );
+			formData.append('token', folderToken ); // append folder token.
 
             // black list file types
             /*if( input.hasAttribute('data-black-list') ){
@@ -459,7 +462,8 @@
             "path=" + _dnd_status.querySelector('input[type="hidden"]').value +
             "&action=dnd_codedropz_upload_delete" +
             "&security=" + dnd_cf7_uploader.ajax_nonce +
-			"&upload_folder=" + sessionId
+			"&upload_folder=" + sessionId +
+			"&token=" + localStorage.getItem( 'dnd_cf7_token_' + sessionId ),
         );
 
         document.querySelectorAll(".has-error-msg").forEach(function(el) {
@@ -494,9 +498,10 @@ function dnd_upload_cf7_unique_id() {
 	// Parse item
 	const data = JSON.parse( item );
 
-	// Compare date
+	// Expired? then remove value from localstorage.
 	if ( Date.now() - data.savedAt > ( 24 * 60 * 60 * 1000 ) ) {
-		localStorage.removeItem('dnd_wpcf7_session_id');
+		localStorage.removeItem('dnd_cf7_token_' + data.value ); // delete token
+		localStorage.removeItem('dnd_wpcf7_session_id');         // delete session id
 		return null;
 	}
 

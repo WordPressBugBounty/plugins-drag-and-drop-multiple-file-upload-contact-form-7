@@ -4,7 +4,7 @@ Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
 Tested up to: 6.9
-Stable tag: 1.3.9.6
+Stable tag: 1.3.9.7
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -94,7 +94,7 @@ You can get [PRO Version here](https://www.codedropz.com/drag-drop-multiple-file
 ### Other Plugins You May Like
 
 * [Order Files for WooCommerce](https://www.codedropz.com/woo-order-files/)
-An extension that attach files to existing WooCommerce orders, allowing both customers and admins to upload and manage files easily.
+An extension that attach files to existing **WooCommerce orders**, allowing both customers and admins to upload and manage files easily.
 
 * [Easy File Upload & Approval](https://wordpress.org/plugins/easy-file-upload-approval/)
 **Easy File Upload & Approval** - A simple file management plugin that lets users effortlessly upload and submit files for review through a clean and simple drag-and-drop interface.
@@ -184,6 +184,12 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+= 1.3.9.7 =
+- Improved : Change htacess generated file to support apache 2.2 & 2.4
+- Security Fix : Unauthenticated Arbitrary File Upload via Non-ASCII Filename Blacklist (Thanks to Leonid Semenenko via WordFence)
+- Security Fix : Unauthenticated Limited Arbitrary File Read via mfile Field (Thanks to Osvaldo Noe Gonzalez Del Rio via WordFence)
+- Security Vulnerability : Fix Unauthenticated Arbitrary File Deletion (Thanks to Bao Nguyen)
+
 = 1.3.9.6 =
 - New : Replaced cookies with localStorage for unique upload folder generation.
 - Security :  Unauthenticated Arbitrary File Upload (Reported by Thomas Sanzey via WordFence) - user able to upload "php5 - php8" for non ascii filename by bypassing extensions present in the blacklists.
