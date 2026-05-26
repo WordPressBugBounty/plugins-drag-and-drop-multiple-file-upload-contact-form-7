@@ -3,8 +3,8 @@ Contributors: glenwpcoder, yordansoares
 Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
-Tested up to: 6.9
-Stable tag: 1.3.9.7
+Tested up to: 7.0
+Stable tag: 1.3.9.8
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -184,6 +184,15 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+
+= 1.3.9.8 =
+- Bug Fix - Js error disabled button after upload when "enable jquery" option is used.
+- Security Fix - Cross Site Scripting (XSS) (via patchstack)
+- Security Fix - Fixed Unauthenticated Arbitrary File Upload (Thanks to "Nguyen Dinh Hung (Mitchell)")
+- JS Fix - Fixed file counter when file upload has an error or when deleting file.
+- Vulnerability - Fixed Authenticated (Administrator+) Stored Cross-Site Scripting via admin fields Settings. (via "Wordfence")
+- Improved - Added sanitization for admin settings/options and escaped localized script data for better security and data handling.
+
 = 1.3.9.7 =
 - Improved : Change htacess generated file to support apache 2.2 & 2.4
 - Security Fix : Unauthenticated Arbitrary File Upload via Non-ASCII Filename Blacklist (Thanks to Leonid Semenenko via WordFence)

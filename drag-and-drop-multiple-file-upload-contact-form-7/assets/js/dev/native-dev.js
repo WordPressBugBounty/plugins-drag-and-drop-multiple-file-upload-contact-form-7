@@ -2,7 +2,7 @@
  * CodeDropz Uploader
  * Copyright 2018 Glen Mongaya
  * CodeDrop Drag&Drop Uploader
- * @version 1.3.9.7
+ * @version 1.3.9.8
  * @author CodeDropz, Glen Don L. Mongaya
  * @license The MIT License (MIT)
  */
@@ -43,7 +43,7 @@
             color: '#000',
             background: '',
             server_max_error: 'Uploaded file exceeds the maximum upload size of your server.',
-            max_file: input.dataset.max ? input.dataset.max : 10, // default 10
+            max_file: input.dataset.max ? parseInt( input.dataset.max ) : 10, // default 10
             max_upload_size: input.dataset.limit ? input.dataset.limit : '10485760', // should be a bytes it's (5MB)
             supported_type: input.dataset.type ? input.dataset.type : 'jpg|jpeg|JPG|png|gif|pdf|doc|docx|ppt|pptx|odt|avi|ogg|m4a|mov|mp3|mp4|mpg|wav|wmv|xls',
             text: 'Drag & Drop Files Here',
@@ -212,7 +212,6 @@
                     return false;
                 }
 
-
                 // Create progress bar
                 const progressBarID = CodeDropz_Object.createProgressBar( file );
                 var has_error = false;
@@ -268,19 +267,25 @@
                                     }
 
                                 } else {
+									const filesCounter   = ( Number( localStorage.getItem(dataStorageName) ) - 1 );
+									const counterElement = input.closest('.codedropz-upload-wrapper').querySelector('.dnd-upload-counter span');
+
                                     progressElement.remove();
                                     detailsElement.insertAdjacentHTML('beforeend', '<span class="has-error">'+ response.data +'</span>');
                                     if( submitButton ){
-                                        submitButton.classList.remove('disabled');
+                                        //submitButton.classList.remove('disabled'); @remove since 1.3.9.8
                                         submitButton.removeAttribute('disabled');
                                     }
                                     progressBar.classList.remove('in-progress');
+
+									// Update counter
+									counterElement.textContent = filesCounter;
                                 }
                             } else {
                                 progressElement.remove();
                                 detailsElement.insertAdjacentHTML('beforeend', '<span class="has-error">'+ options.server_max_error +'</span>');
                                 if( submitButton ){
-                                    submitButton.classList.remove('disabled');
+                                    //submitButton.classList.remove('disabled'); @remove since 1.3.9.8
                                     submitButton.removeAttribute('disabled');
                                 }
                                 progressBar.classList.remove('in-progress');
@@ -393,7 +398,7 @@
             // Disable button
             disableBtn : function( BtnOJB ) {
                 if( BtnOJB  ) {
-                    BtnOJB.classList.add('disabled');
+                    //BtnOJB.classList.add('disabled'); @remove since 1.3.9.8
                     BtnOJB.disabled = true;
                 }
             }
@@ -417,6 +422,7 @@
         if (_dnd_status.classList.contains("in-progress") || _dnd_status.querySelector(".has-error")) {
             _dnd_status.remove();
             localStorage.setItem(removeStorageData, storageCount - 1);
+			_parent_wrap.querySelector(".dnd-upload-counter span").textContent = Number(localStorage.getItem(removeStorageData)) - 1;
             return false;
         }
 
@@ -581,10 +587,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     // If it's complete remove disabled attribute in button
                     if ( ( span && span.classList.contains('optional') ) || ! span || checkboxInput.checked || form.classList.contains('wpcf7-acceptance-as-validation')) {
-                        setTimeout(function(){
+						setTimeout(function(){
                             const submitButton = form.querySelector('button[type=submit], input[type=submit]');
                             if( submitButton ){
-								submitButton.classList.remove('disabled');
+								//submitButton.classList.remove('disabled'); @remove since 1.3.9.8
                                 submitButton.removeAttribute('disabled');
                             }
                         }, 1);
