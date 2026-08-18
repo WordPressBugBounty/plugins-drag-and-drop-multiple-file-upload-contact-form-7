@@ -2,7 +2,7 @@
  * CodeDropz Uploader
  * Copyright 2018 Glen Mongaya
  * CodeDrop Drag&Drop Uploader
- * @version 1.3.9.8
+ * @version 1.3.9.9
  * @author CodeDropz, Glen Don L. Mongaya
  * @license The MIT License (MIT)
  */
@@ -12,17 +12,24 @@
 
     const CodeDropz_Uploader = function( settings ){
 
-        // Generate & check nonce
+        // Generate & check nonce - cached on window so multiple upload fields
         const form = document.querySelector('form.wpcf7-form');
-        if( form ) {
-            const data = new FormData();
-            data.append('action', '_wpcf7_check_nonce');
-            data.append('_ajax_nonce', dnd_cf7_uploader.ajax_nonce );
-            fetch(dnd_cf7_uploader.ajax_url, { method: 'POST', body: data })
-            .then(res => res.json())
-            .then(({ data, success }) => success && (dnd_cf7_uploader.ajax_nonce = data))
-            .catch(console.error)
-		}
+        if ( form && ! window.dnd_cf7_auth ) {
+            window.dnd_cf7_auth = (function(){
+                const data = new FormData();
+                data.append('action', '_wpcf7_check_nonce');
+                data.append('_ajax_nonce', dnd_cf7_uploader.ajax_nonce );
+                return fetch(dnd_cf7_uploader.ajax_url, { method: 'POST', body: data })
+                    .then(function(res){ return res.json(); })
+                    .then(function(res){
+                        if ( res && res.success && res.data ) {
+                            dnd_cf7_uploader.ajax_nonce = res.data;
+                        }
+                        return res;
+                    })
+                    .catch(function(err){ console.error(err); });
+            })();
+        }
 
 		// Generate random string
 		const generateRandomFolder = function( length = 20 ) {
@@ -62,13 +69,13 @@
         localStorage.setItem( dataStorageName, 1);
 
 		// Get unique id from local storage.
-		var sessionID = dnd_upload_cf7_unique_id();
+		var sessionID   = dnd_upload_cf7_unique_id();
 		var folderToken = sessionID ? localStorage.getItem( 'dnd_cf7_token_' + sessionID ) : null;
 
 		// Unique upload session_id & token
 		if ( ! sessionID || ! folderToken ) {
-			sessionID   = generateRandomFolder();
-			folderToken = generateRandomFolder(); // Generate folder token if not exists.
+			sessionID   = generateRandomFolder(); // If not exists, generate new folder and save it in localstorage.
+			folderToken = generateRandomFolder(); // If not exists, generate new token and save it in localstorage.
 			localStorage.setItem( 'dnd_wpcf7_session_id', JSON.stringify({ value: sessionID, savedAt: Date.now() }) );
 			localStorage.setItem( 'dnd_cf7_token_' + sessionID, folderToken );
 		}
@@ -165,12 +172,22 @@
 
             // gathering the form data
             var formData = new FormData();
+			//const recaptcha = form_handler.querySelector('input[name="_wpcf7_recaptcha_response"]');
+			const hp = form_handler.querySelector('input[name="wpcf7_hp_field"]');
 
             // Append file
             //formData.append('supported_type', options.supported_type ); @note : removed due Vulnerability
             formData.append('action', 'dnd_codedropz_upload' );
             formData.append('type', action );
             formData.append('security', dnd_cf7_uploader.ajax_nonce );
+
+			if ( hp ) {
+				formData.append('hp_field', hp.value );
+			}
+
+			/*if ( recaptcha ) {
+				formData.append('g-recaptcha-response', recaptcha.value)
+			}*/
 
             // CF7 - upload field name & cf7 id
             formData.append('form_id', input.dataset.id);
@@ -211,6 +228,11 @@
                     }
                     return false;
                 }
+
+				// Check if uploader click browse or dragging files
+				if ( ! ['click', 'drop'].includes( action ) ) {
+					return false;
+				}
 
                 // Create progress bar
                 const progressBarID = CodeDropz_Object.createProgressBar( file );
@@ -271,7 +293,10 @@
 									const counterElement = input.closest('.codedropz-upload-wrapper').querySelector('.dnd-upload-counter span');
 
                                     progressElement.remove();
-                                    detailsElement.insertAdjacentHTML('beforeend', '<span class="has-error">'+ response.data +'</span>');
+                                    const errEl = document.createElement('span');
+                                    errEl.className = 'has-error';
+                                    errEl.textContent = response.data;
+                                    detailsElement.appendChild(errEl);
                                     if( submitButton ){
                                         //submitButton.classList.remove('disabled'); @remove since 1.3.9.8
                                         submitButton.removeAttribute('disabled');
@@ -327,8 +352,8 @@
                         <span class="file"></span>
                     </div>
                     <div class="dnd-upload-details">
-                        <span class="name"><span>${file.name}</span><em>(${CodeDropz_Object.bytesToSize(file.size)})</em></span>
-                        <a href="#" title="${dnd_cf7_uploader.drag_n_drop_upload.delete.title}" class="remove-file" data-storage="${dataStorageName}">
+                        <span class="name"><span>${dnd_escape_html(file.name)}</span><em>(${CodeDropz_Object.bytesToSize(file.size)})</em></span>
+                        <a href="#" title="${dnd_cf7_uploader.drag_n_drop_upload.delete.title}" class="remove-file" data-storage="${dataStorageName}" data-name="${input.dataset.name}">
                         <span class="dnd-icon-remove"></span>
                         </a>
                         <span class="dnd-progress-bar"><span></span></span>
@@ -406,6 +431,15 @@
 
 	} // end fn.function
 
+    // Escape untrusted text before it's ever interpolated into an HTML string -
+    // file.name comes straight from the local filesystem/drag-drop and can legally
+    // contain "<", ">", '"' on most OSes, so it must never go into innerHTML raw.
+    const dnd_escape_html = function( str ) {
+        const div = document.createElement('div');
+        div.textContent = String( str );
+        return div.innerHTML;
+    };
+
     // Remove File
     document.addEventListener("click", function(e) {
         if( !e.target.classList.contains("dnd-icon-remove") ) return;
@@ -415,6 +449,7 @@
             _dnd_status       = _self.closest(".dnd-upload-status"),
             _parent_wrap      = _self.closest(".codedropz-upload-wrapper"),
             removeStorageData = _self.parentElement.getAttribute("data-storage"),
+            uploadName        = _self.parentElement.getAttribute("data-name"),
             storageCount      = Number(localStorage.getItem(removeStorageData)),
 			sessionId         = dnd_upload_cf7_unique_id();
 
@@ -469,6 +504,7 @@
             "&action=dnd_codedropz_upload_delete" +
             "&security=" + dnd_cf7_uploader.ajax_nonce +
 			"&upload_folder=" + sessionId +
+			"&upload_name=" + encodeURIComponent( uploadName || '' ) +
 			"&token=" + localStorage.getItem( 'dnd_cf7_token_' + sessionId ),
         );
 

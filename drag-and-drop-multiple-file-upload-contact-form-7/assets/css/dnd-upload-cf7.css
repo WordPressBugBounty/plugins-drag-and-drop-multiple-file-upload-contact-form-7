@@ -150,6 +150,16 @@
 }
 /* END : Jquery Validation CF7 */
 
+/* Honeypot field */
+.wpcf7_hp_field {
+	position: absolute !important;
+	left: -9999px !important;
+	top: -9999px !important;
+	width: 1px !important;
+	height: 1px !important;
+	overflow: hidden !important;
+}
+
 @media screen and (max-width: 767px) {
 	.dnd-upload-status .dnd-upload-details .name em { font-weight:normal; }
 	.dnd-upload-status .dnd-upload-details .name { padding-right:60px; }

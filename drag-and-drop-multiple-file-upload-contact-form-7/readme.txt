@@ -4,7 +4,7 @@ Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
 Tested up to: 7.0
-Stable tag: 1.3.9.8
+Stable tag: 1.3.9.9
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -184,6 +184,12 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+
+= 1.3.9.9 =
+- Security - Fixed a stored XSS vulnerability in the Heading Tag setting. (Thanks to "Sai Praneeth Koti" via WPScan)
+- Security - Fixed unauthenticated remote code execution via filename (Thanks to "Jakub Herman" via WPScan)
+- Improved - Nonce generation is now protected or logs as per IP address.
+- Improved - Enhanced spam upload protection.
 
 = 1.3.9.8 =
 - Bug Fix - Js error disabled button after upload when "enable jquery" option is used.

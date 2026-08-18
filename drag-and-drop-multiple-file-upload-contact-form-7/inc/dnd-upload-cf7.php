@@ -58,13 +58,137 @@
 	// Flamingo Hooks
 	add_action('before_delete_post', 'dnd_remove_uploaded_files');
 
-    // Nonce
-    function dnd_wpcf7_nonce_check() {
-		// Block curl request.
-		if ( strpos( $_SERVER['HTTP_USER_AGENT'], 'curl' ) !== false ) {
-			wp_send_json_error('Request blocked: cURL access is forbidden.');
+	// For spam upload protection.
+	add_filter( 'wpcf7_form_elements', 'dnd_wpcf7_append_hp_field' );
+
+	// Append hidden honeypot field.
+	function dnd_wpcf7_append_hp_field( $content ) {
+		$hp = '<input type="text" class="wpcf7_hp_field" name="wpcf7_hp_field" value="" tabindex="-1" autocomplete="off" />';
+		return $content . $hp;
+	}
+
+	// Verify if the current upload is valid.
+	function dnd_wpcf7_valid_request( $form_id, $upload_name ) {
+
+		// Verify form.
+		if ( ! $form_id ) return 'invalid_request';
+		$form = WPCF7_ContactForm::get_instance( $form_id );
+		if ( ! $form || ! is_a( $form, 'WPCF7_ContactForm' ) ) {
+			return 'invalid_form';
 		}
 
+		// Honeypot.
+		if ( ! empty( $_POST['hp_field'] ) ) {
+			return 'invalid_request';
+		}
+
+		// 1. Setup Caps
+		$max_file        = dnd_cf7_get_option( $form_id, 'max-file' );
+		$max_user_limit  = is_array( $max_file ) ? (int)$max_file["$upload_name"] : 10; // Get file upload settings by each field name.
+		$max_network_cap = dnd_cf7_settings('drag_n_drop_max_network_cap');
+		$max_network_cap = $max_network_cap ? (int) $max_network_cap : ( $max_user_limit * 3 );  // Max network cap per IP address.
+		$time_exp_window = apply_filters( 'dnd_cf7_exp_window', 900 ); // 15 minutes lifespan for the tracking window.
+
+		// 2. Get token and IP address
+		$user_token = (string) sanitize_key( $_POST['token'] ?? '' ); // [fixed] use sanitize_key() to match dnd_codedropz_upload_delete()'s comparison
+   		$user_ip    = dnd_wpcf7_get_ip();
+
+		// Validate token
+		if ( empty( $user_token ) || false === $user_ip ) {
+			return 'empty_token|ip_address';
+		}
+
+		// Build unique Transient database keys.
+		// shared limit instead of each field's own max-file setting.
+		$user_transient_key    = 'upload_dnd_usr_' . md5( $user_token . '|' . $upload_name );
+		$network_transient_key = 'upload_dnd_net_' . md5( $user_ip );
+
+		// Fetch current counts from the database
+		$user_upload_count    = get_transient( $user_transient_key );
+		$network_upload_count = get_transient( $network_transient_key );
+
+		if ( false === $user_upload_count ) { $user_upload_count = 0; }
+   		if ( false === $network_upload_count ) { $network_upload_count = 0; }
+
+		// 3. Evaluate Limitations
+
+		// Rule A: Check if this specific browser token has hit max file limit.
+		if ( $user_upload_count >= $max_user_limit ) {
+			return 'max_limit_reached';
+		}
+
+		// Rule B: Check if the network environment is triggering bulk bot flooding (100+ files)
+		if ( $network_upload_count >= $max_network_cap ) {
+			return 'network_cap_threshold_reached';
+		}
+
+		// Update transients (uploads count & network (per IP) total count).
+		set_transient( $user_transient_key, $user_upload_count + 1, $time_exp_window );       // 15 minutes
+    	set_transient( $network_transient_key, $network_upload_count + 1, $time_exp_window ); // 15 minutes
+
+		return;
+	}
+
+	// Get users ip address. @since 1.3.9.9
+	function dnd_wpcf7_get_ip() {
+
+		// These headers can be spoofed unless set by a trusted proxy.
+		// Only trust them when the site owner confirms a trusted proxy is in use.
+		$trust_proxy_headers = apply_filters( 'dnd_cf7_trust_proxy_headers', false );
+		$headers = $trust_proxy_headers
+			? [ 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR' ]
+			: [ 'REMOTE_ADDR' ];
+
+		foreach ( $headers as $key ) {
+			if ( ! empty( $_SERVER[ $key ] ) ) {
+				$ip = trim( explode( ',', $_SERVER[ $key ] )[0] );
+				if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+					return $ip;
+				}
+			}
+		}
+
+		return false;
+	}
+
+   	/* Rate-limit public nonce requests to prevent bots from hammering the endpoint.
+	 * Default: 60 requests per IP per 60 seconds. @since 1.3.9.9 */
+    function dnd_cf7_is_nonce_throttled( $key, $max = 60, $window = 60 ) {
+        $transient_key = 'dnd_cf7_rl_' . md5( $key );
+        $hits          = (int) get_transient( $transient_key );
+
+        if ( $hits >= $max ) {
+            return true;
+        }
+
+        set_transient( $transient_key, $hits + 1, $window );
+        return false;
+    }
+
+    // Nonce
+    function dnd_wpcf7_nonce_check() {
+
+		// Throttle by IP before doing any other work - reuses the same spoof-resistant (allowed "30 requests" nonce per minute for "1" IP address)
+		if ( dnd_cf7_is_nonce_throttled( 'nonce_' . dnd_wpcf7_get_ip(), 30, MINUTE_IN_SECONDS ) ) {
+			wp_send_json_error( 'Too many requests. Please try again later.' );
+		}
+
+		// Block curl request.
+		$ua = isset( $_SERVER['HTTP_USER_AGENT'] ) ? $_SERVER['HTTP_USER_AGENT'] : '';
+
+		// Bot keywords
+		$blocked_bot_keywords = array(
+			'curl', 'python', 'wget', 'go-http-client', 'java', 'perl',
+			'headlesschrome', 'playwright', 'puppeteer', 'postman', 'insomnia'
+		);
+
+		foreach ( $blocked_bot_keywords as $bot_string ) {
+			if ( strpos( $ua, $bot_string ) !== false ) {
+				wp_send_json_error( 'Request blocked.' );
+			}
+		}
+
+		// Issued nonce.
         if( ! check_ajax_referer( 'dnd-cf7-security-nonce', false, false ) ){
             wp_send_json_success( wp_create_nonce( "dnd-cf7-security-nonce" ) );
         }
@@ -100,13 +224,6 @@
 
 			if ( ! file_exists( $htaccess_file ) ) {
 				if ( $handle = fopen( $htaccess_file, 'w' ) ) {
-					/*fwrite(
-						$handle,
-						"Options -Indexes\n\n" .
-						"<FilesMatch \"\\.(php|phar)$\">\n" .
-						"    Deny from all\n" .
-						"</FilesMatch>\n"
-					);*/
 					fwrite(
 						$handle,
 						"Options -Indexes\n\n" .
@@ -339,6 +456,12 @@
 				// Check if current path is directory (recursive)
 				if ( is_dir( $dir . $file ) ) {
 					dnd_cf7_auto_clean_dir( $dir . $file );
+
+					// Only remove the folder once it's actually empty - never
+					// delete it while it still holds files (e.g. not old enough yet).
+					if ( dnd_cf7_is_dir_empty( $dir . $file ) ) {
+						@rmdir( $dir . $file );
+					}
 					continue;
 				}
 
@@ -361,6 +484,31 @@
 			}
 			@closedir( $handle );
 		}
+	}
+
+	// Check whether a directory has no real files/folders left in it,
+	// ignoring the placeholder . / .. / .htaccess / index.php entries.
+	function dnd_cf7_is_dir_empty( $dir ) {
+
+		if ( ! is_readable( $dir ) ) {
+			return false;
+		}
+
+		$handle = @opendir( $dir );
+		if ( ! $handle ) {
+			return false;
+		}
+
+		while ( false !== ( $entry = readdir( $handle ) ) ) {
+			if ( $entry == '.' || $entry == '..' || $entry == '.htaccess' || $entry == 'index.php' ) {
+				continue;
+			}
+			closedir( $handle );
+			return false;
+		}
+
+		closedir( $handle );
+		return true;
 	}
 
 	// Hooks before sending the email - ( append links to body email )
@@ -568,7 +716,7 @@
         // All data options
         $data_options = apply_filters('dnd_cf7_data_options',
             array(
-                'tag'				=>	( dnd_cf7_settings('drag_n_drop_heading_tag') ?: 'h3' ),
+                'tag'				=>	dnd_cf7_sanitize_heading_tag( dnd_cf7_settings('drag_n_drop_heading_tag') ?: 'h3' ),
                 'text'				=>	( esc_html( dnd_cf7_settings('drag_n_drop_text') ) ?: esc_html__('Drag & Drop Files Here','drag-and-drop-multiple-file-upload-contact-form-7') ),
                 'or_separator'		=>	( esc_html( dnd_cf7_settings('drag_n_drop_separator') ) ?: esc_html__('or','drag-and-drop-multiple-file-upload-contact-form-7') ),
                 'browse'			=>	( esc_html( dnd_cf7_settings('drag_n_drop_browse_text') ) ?: esc_html__('Browse Files','drag-and-drop-multiple-file-upload-contact-form-7') ),
@@ -746,13 +894,20 @@
 			return $result;
 		}
 
+		// HP field validation
+		if ( ! empty( $_POST['wpcf7_hp_field'] ) ) {
+			$result->invalidate( $tag, 'unauthorized request' );
+			return $result;
+		}
+
 		// Cf7 Conditional Field
 		if(
 			in_array('cf7-conditional-fields/contact-form-7-conditional-fields.php', get_option('active_plugins') ) ||
 		    in_array('cf7-conditional-fields/conditional-fields.php', get_option('active_plugins') )
 		){
 
-			$hidden_groups = json_decode( stripslashes( $_POST['_wpcf7cf_hidden_groups'] ) );
+			$hidden_groups = isset( $_POST['_wpcf7cf_hidden_groups'] ) ? json_decode( stripslashes( $_POST['_wpcf7cf_hidden_groups'] ) ) : array();
+			$hidden_groups = is_array( $hidden_groups ) ? $hidden_groups : array(); // [fixed] avoid PHP 8 TypeError: in_array() requires an array haystack
 			$form_id       = WPCF7_ContactForm::get_current()->id();
 			$group_fields  = dnd_cf7_conditional_fields( $form_id );
 
@@ -836,7 +991,8 @@
         $options = array();
         $args = array(
             'limit'     =>  10485760,
-            'filetypes' =>  dnd_upload_default_ext()
+            'filetypes' =>  dnd_upload_default_ext(),
+            'max-file'  =>  10, // matches the tag generator's "10" placeholder and the JS client's own default.
         );
 
         // Loop all upload tags
@@ -877,11 +1033,16 @@
 	// Begin process upload
 	function dnd_upload_cf7_upload() {
 
+		// check and verify ajax request
+        if( ! check_ajax_referer( 'dnd-cf7-security-nonce', 'security', false ) ) {
+            wp_send_json_error('The security nonce is invalid or expired.');
+        }
+
 		// cf7 form id & upload name
-		$cf7_id = sanitize_text_field( (int)$_POST['form_id'] );
+		$cf7_id = isset( $_POST['form_id'] ) ? sanitize_text_field( (int) $_POST['form_id'] ) : 0;
 
 		// Get the name of upload field.
-		$cf7_upload_name = sanitize_text_field( $_POST['upload_name'] );
+		$cf7_upload_name = isset( $_POST['upload_name'] ) ? sanitize_text_field( $_POST['upload_name'] ) : '';
 
 		// Get allowed ext list @expected : png|jpeg|jpg
 		$allowed_types = dnd_cf7_get_option( $cf7_id, 'filetypes' );
@@ -892,10 +1053,11 @@
         // Blacklist Option
         $blacklist = dnd_cf7_get_option( $cf7_id, 'blacklist-types' );
 
-		// check and verify ajax request
-        if( ! check_ajax_referer( 'dnd-cf7-security-nonce', 'security', false ) ) {
-            wp_send_json_error('The security nonce is invalid or expired.');
-        }
+		// Check for valid user request. (return an error if invalid).
+		$not_valid_request = dnd_wpcf7_valid_request( $cf7_id, $cf7_upload_name );
+		if ( $not_valid_request ) {
+			wp_send_json_error( $not_valid_request ); // Error: send an error that this request is not valid.
+		}
 
         // Get blacklist Types (merge default "not allowed" extensions and "user defined" option)
 		$blacklist_types = dnd_cf7_not_allowed_ext();
@@ -907,13 +1069,25 @@
 
 		// Get upload dir
 		$folder = isset( $_POST['upload_folder'] ) ? sanitize_text_field( $_POST['upload_folder'] ) : null;
-		$path   = dnd_get_upload_dir( $folder ); // ok
+
+		// @since 1.3.9.9 never write to the protected root itself - force a subfolder when none is supplied.
+		if ( empty( $folder ) ) {
+			$folder = wp_generate_password( 12, false, false );
+		}
+
+		$path = dnd_get_upload_dir( $folder ); // ok
 
 		// input type file 'name'
 		$name = 'upload-file';
 
 		// Get File ( name, type, tmp_name, size, error )
 		$file = isset( $_FILES[$name] ) ? $_FILES[$name] : null;
+
+		// No file part at all in the request - bail before touching array keys on null
+		// (PHP 8 warns on array access into null, and $file['tmp_name'] etc. below assume an array).
+		if ( ! $file ) {
+			wp_send_json_error( esc_html( dnd_cf7_settings('drag_n_drop_error_failed_to_upload') ) ?: dnd_cf7_error_msg('failed_upload') );
+		}
 
 		// Tmp file
 		$tmp_file = preg_replace('/^.*?:\/\//', '', $file['tmp_name'] );
@@ -949,19 +1123,22 @@
 		// Stipped icons from the filename.
 		$filename = dnd_cf7_remove_icons( $filename );
 
+		// @since 1.3.9.9 moved up so the extension below is checked post-mutation, not pre-mutation.
+		$filename = wpcf7_antiscript_file_name( $filename );
+
 		// Get file extension
         $extension = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
 
         // Validate File Types (if supported type is set to "*")
 		if ( $supported_type == '*' ) {
 			$file_type          = wp_check_filetype( $filename );
-			$not_allowed_ext    = array( 'phar', 'svg', 'svgz', 'php', 'php3','php4', 'pht', 'phtml', 'php5', 'php7', 'php8', 'htaccess' ); // not allowed file type.
+			$not_allowed_ext    = array( 'phar', 'svg', 'svgz', 'php', 'php3','php4', 'pht', 'phtml', 'php5', 'php7', 'php8', 'htaccess', 'web.config' ); // not allowed file type. @since 1.3.9.9 added web.config
 			$type_ext           = ( $file_type['ext'] !== false ? strtolower( $file_type['ext'] ) : $extension );
 			$error_invalid_type = esc_html( dnd_cf7_settings('drag_n_drop_error_invalid_file') ) ?: dnd_cf7_error_msg('invalid_type');
 
 			if ( ! empty( $blacklist_types ) && in_array( $type_ext, $blacklist_types, true ) ) {
 				wp_send_json_error( $error_invalid_type );
-			} elseif ( in_array( $type_ext, $not_allowed_ext, true ) ) {
+			} elseif ( in_array( $type_ext, $not_allowed_ext, true ) || dnd_cf7_is_dangerous_filename( $filename ) ) {
 				wp_send_json_error( $error_invalid_type );
 			}
 		}
@@ -996,13 +1173,16 @@
 			wp_send_json_error( esc_html( dnd_cf7_settings('drag_n_drop_error_files_too_large') ) ?: dnd_cf7_error_msg('large_file') );
 		}
 
-		// add anti-script filename.
-		$filename = wpcf7_antiscript_file_name( $filename );
-
 		// Randomize filename.
 		if( 'yes' == dnd_cf7_settings('drag_n_drop_enable_unique_name') ) {
 			$random_name = md5( uniqid( rand(), true ) .'-'. mt_rand() .'-'. time() );
 			$filename    = sanitize_file_name( $random_name .'.'. $extension );
+		}
+
+		// @since 1.3.9.9 re-validate the exact name we're about to write (post-mutation guard).
+		$final_ext = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+		if ( $supported_type == '*' && ( ( ! empty( $blacklist_types ) && in_array( $final_ext, $blacklist_types, true ) ) || in_array( $final_ext, $not_allowed_ext, true ) || dnd_cf7_is_dangerous_filename( $filename ) ) ) {
+			wp_send_json_error( $error_invalid_type );
 		}
 
 		// Generate new path + filename.
@@ -1017,7 +1197,7 @@
 			// Get folder uuid from the path/dir.
 			$folder_uuid  = wp_basename( $path['upload_dir'] );
 			$token_key    = 'dnd_cf7_token_' . $folder_uuid;
-			$client_token = (string) sanitize_text_field( $_POST['token'] ?? '' );
+			$client_token = (string) sanitize_key( $_POST['token'] ?? '' ); // [fixed] consistent with delete's sanitize_key()
 
 			if ( empty( $client_token ) ) {
 				wp_send_json_error( 'Error: Missing security token.' );
@@ -1026,12 +1206,12 @@
 			// Check if a token already exists for this folder.
 			$existing_token = get_transient( $token_key );
 
-			// Generate cryptographic token and store it in transient for 12 hours. [added april 2026]
+			// Generate cryptographic token and store it in transient for 12 hours. [added april 2026].
 			if ( false === $existing_token ) {
 				set_transient( $token_key, $client_token, 12 * HOUR_IN_SECONDS );
 				$upload_token = $client_token;
 			} else {
-				// Verify ownership: match existing and requested token
+				// Verify ownership: match existing and requested token.
 				if ( ! hash_equals( (string) $existing_token, $client_token ) ) {
 					wp_send_json_error( 'Error: Unauthorized to upload or modify this folder.' );
 				}
@@ -1040,22 +1220,22 @@
 				$upload_token = $existing_token;
 			}
 
-            // Setup path and files url
+            // Setup path and files url.
 			$files = array(
 				'path'	=> $folder_uuid,
 				'file'	=> str_replace('/','-', $filename)
 			);
 
-			// Change file permission to 0400
+			// Change file permission to 0400.
 			chmod( $new_file, 0644 );
 
-            // Allow other plugin to hook
+            // Allow other plugin to hook.
             do_action('wpcf7_upload_file_name_custom', $new_file, $filename );
 
-			// Custom filter after upload
+			// Custom filter after upload.
 			$files = apply_filters( 'dnd_cf7_after_upload', $files );
 
-            // Return json files
+            // Return json files.
 			wp_send_json_success( $files );
 		}
 
@@ -1083,8 +1263,8 @@
 			return false;
 		}
 
-		// These are ALL allowed character groups while rejecting emoji.
-		$pattern = '/^[[:ascii:]\p{L}\p{N}\p{M}\p{Z}\p{P}\p{Sc}]+$/u';
+		// @since 1.3.9.9 reject control/DEL bytes to close the interleaved-filename bypass.
+		$pattern = '/^[\x20-\x7E\p{L}\p{N}\p{M}\p{Z}\p{P}\p{Sc}]+$/u';
 
 		// Returns true if it only contains allowed characters, false if it hits an emoji/weird symbol
 		return (bool) preg_match( $pattern, $filename );
@@ -1102,7 +1282,7 @@
         }
 
 		// Block curl request.
-		if ( strpos( $_SERVER['HTTP_USER_AGENT'], 'curl' ) !== false ) {
+		if ( isset( $_SERVER['HTTP_USER_AGENT'] ) && strpos( $_SERVER['HTTP_USER_AGENT'], 'curl' ) !== false ) { // [fixed] guard against missing UA header (PHP 8 undefined-key warning)
 			wp_send_json_error('Request blocked: cURL access is forbidden.');
 		}
 
@@ -1112,16 +1292,16 @@
 		// Make sure path is set
 		if ( ! is_null( $path ) ) {
 
-			// Check valid filename & extensions
-			if ( preg_match( '/wp-|(\.php|\.exe|\.js|\.phtml|\.cgi|\.aspx|\.asp|\.bat)(?!_\.txt$)/', $path ) ) {
-                wp_send_json_error( 'Error: File not safe' );
-            }
-
-			// Validate path if it's match on the current folder
+			// @since 1.3.9.9 mutate first, then validate the exact name we'll act on (same fix as upload path).
 			$unique_id      = sanitize_file_name( $_POST['upload_folder'] ?? '' );
 			$current_folder = trim( dirname( $path ) );
-			$file_name      = wp_basename( $path ); // added Aug 2025
+			$file_name      = sanitize_file_name( wp_basename( $path ) );
 			$current_path   = $dir['upload_dir'] .'/'. $unique_id .'/'. $file_name;
+
+			// Check valid filename & extensions against the final basename.
+			if ( preg_match( '/wp-|(\.php|\.exe|\.js|\.phtml|\.cgi|\.aspx|\.asp|\.bat)(?!_\.txt$)/', trailingslashit( $current_folder ) . $file_name ) ) {
+                wp_send_json_error( 'Error: File not safe' );
+            }
 
 			// Get tokens and validate token. (added april 2026)
 			$token          = (string) sanitize_key( $_POST['token'] ?? '' );
@@ -1139,6 +1319,15 @@
 			// Validate unique id and current_folder to ensure they match.
 			if ( ( $unique_id !== $current_folder ) || ! file_exists( $current_path ) || preg_match( '#\.\.[/\\\\]#', $path ) ) {
 				wp_send_json_error( 'Error: Unauthorized Request!' );
+			}
+
+			// Reduce transient count when file is removed. Key must match the format used in dnd_wpcf7_valid_request() -
+			// scoped by upload_name so each field's counter is decremented independently.
+			$upload_name        = isset( $_POST['upload_name'] ) ? sanitize_text_field( $_POST['upload_name'] ) : '';
+			$user_transient_key = 'upload_dnd_usr_' . md5( $token . '|' . $upload_name );
+       	 	$current_count      = (int) get_transient( $user_transient_key );
+			if ( $current_count > 0 ) {
+				set_transient( $user_transient_key, $current_count - 1, 900 );
 			}
 
 			// Concatenate path and upload directory
@@ -1191,9 +1380,14 @@
 		return $file_type_pattern;
 	}
 
+	// @since 1.3.9.9 full-basename check, catches names not dangerous by extension alone (.htaccess/web.config/.user.ini).
+	function dnd_cf7_is_dangerous_filename( $filename ) {
+		return in_array( strtolower( $filename ), array( '.htaccess', 'web.config', '.user.ini' ), true );
+	}
+
 	// list of not allowed extensions.
 	function dnd_cf7_not_allowed_ext() {
-		return array( 'html', 'svg', 'svgz', 'phar', 'php', 'php3','php4','pht', 'php5', 'php7', 'php8', 'xhtml','shtml', 'mhtml', 'dhtml', 'phtml','exe','script', 'app', 'asp', 'bas', 'bat', 'cer', 'cgi', 'chm', 'cmd', 'com', 'cpl', 'crt', 'csh', 'csr', 'dll', 'drv', 'fxp', 'flv', 'hlp', 'hta', 'htaccess', 'htm', 'htpasswd', 'inf', 'ins', 'isp', 'jar', 'js', 'jse', 'jsp', 'ksh', 'lnk', 'mdb', 'mde', 'mdt', 'mdw', 'msc', 'msi', 'msp', 'mst', 'ops', 'pcd', 'pif', 'pl', 'prg', 'ps1', 'ps2', 'py', 'rb', 'reg', 'scr', 'sct', 'sh', 'shb', 'shs', 'sys', 'swf', 'tmp', 'torrent', 'url', 'vb', 'vbe', 'vbs', 'vbscript', 'wsc', 'wsf', 'wsf', 'wsh' );
+		return array( 'html', 'svg', 'svgz', 'phar', 'php', 'php3','php4','pht', 'php5', 'php7', 'php8', 'xhtml','shtml', 'mhtml', 'dhtml', 'phtml','exe','script', 'app', 'asp', 'bas', 'bat', 'cer', 'cgi', 'chm', 'cmd', 'com', 'cpl', 'crt', 'csh', 'csr', 'dll', 'drv', 'fxp', 'flv', 'hlp', 'hta', 'htaccess', 'htm', 'htpasswd', 'inf', 'ins', 'isp', 'jar', 'js', 'jse', 'jsp', 'ksh', 'lnk', 'mdb', 'mde', 'mdt', 'mdw', 'msc', 'msi', 'msp', 'mst', 'ops', 'pcd', 'pif', 'pl', 'prg', 'ps1', 'ps2', 'py', 'rb', 'reg', 'scr', 'sct', 'sh', 'shb', 'shs', 'sys', 'swf', 'tmp', 'torrent', 'url', 'vb', 'vbe', 'vbs', 'vbscript', 'wsc', 'wsf', 'wsf', 'wsh', 'web.config' ); // @since 1.3.9.9 added web.config
 	}
 
 	// Add more validation for file extension
@@ -1207,12 +1401,12 @@
 		// allowed ext.
 		$allowed_ext = apply_filters( 'dnd_cf7_allowed_ext', array( 'ipt' ) );
 
-		// Search in $not_allowed extension and match
-		foreach( $not_allowed as $single_ext ) {
-			if ( strpos( $single_ext, $extension, 0 ) !== false && ! in_array( $extension, $allowed_ext )) {
-				$valid = false;
-				break;
-			}
+		// Exact-match the uploaded extension against the blacklist. (Previously this used
+		// strpos($single_ext, $extension), which checks the wrong direction: it only blocks
+		// extensions that happen to be a *substring* of a blacklist word, so anything not
+		// already listed verbatim - e.g. a future "phpXX" variant - would silently pass.)
+		if ( in_array( $extension, $not_allowed, true ) && ! in_array( $extension, $allowed_ext, true ) ) {
+			$valid = false;
 		}
 
 		// If pass on first validation - check extension if exists in allowed types
@@ -1245,6 +1439,14 @@
 				);
 				echo '</p>';
 				echo '</div>';
+
+				// Promo
+				echo '
+				<span style="position:absolute;right: 20px;top: 6%;">
+					<a style="display:block;" href="https://www.codedropz.com/drag-drop-multiple-file-upload-for-contact-form-7/" target="_blank">
+						<img width="150" src="'. plugins_url( 'assets/images/cd-promo-banner.png', dirname(__FILE__) ) .'" />
+					</a>
+				</span>';
 
 				// Error settings
 				settings_errors();
@@ -1363,6 +1565,15 @@
 						<th scope="row"><?php esc_html_e('Fix Spam','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
 						<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_fix_spam]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_fix_spam')); ?>> Yes <p class="description"><em>If a “spam” answer is the response, Contact Form 7 will suspend the email and show a message saying, “There was an error trying to send your message", force to send message by checking this option..</em></p></td>
 					</tr>
+					<tr valign="top">
+						<th scope="row"><?php esc_html_e('Upload Spam Protection','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+						<td>
+							<input type="checkbox" name="dndmfu_settings[drag_n_drop_spam_security]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_spam_security')); ?>> Yes
+							<p class="description">
+								<em><?php esc_html_e( 'If you encounter spam uploads or automated file upload abuse, enable this option. Suspicious upload activity will be automatically detected and blocked.', 'drag-and-drop-multiple-file-upload-contact-form-7'); ?></em>
+							</p>
+						</td>
+					</tr>
 				</table>
 
                 <h2 style="display:none"><?php esc_html_e('Use jQuery','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
@@ -1380,6 +1591,18 @@
 					<tr valign="top">
 						<th scope="row"><?php esc_html_e('Disable Submit button','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
 						<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_disable_btn]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_disable_btn')); ?>> Yes <p class="description">Disable submit button if there's an error.</p></td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e('Network Cap','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
+
+				<table class="form-table">
+					<tr valign="top">
+						<th scope="row"><?php esc_html_e('Max Network Cap','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+						<td>
+							<input type="text" name="dndmfu_settings[drag_n_drop_max_network_cap]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_max_network_cap') ); ?>" placeholder="50 or 100" />
+							<p class="description"><?php esc_html_e('Increase the maximum network cap if you encounter an error such as “network_cap_threshold_reached.”', 'drag-and-drop-multiple-file-upload-contact-form-7'); ?></p>
+						</td>
 					</tr>
 				</table>
 
@@ -1471,7 +1694,21 @@
 			$sanitized[$i] = sanitize_text_field( $field );
 		}
 
+		// The heading tag is rendered as a literal HTML tag name on the front-end,
+		// so it must be restricted to a known-safe whitelist instead of free text.
+		if ( isset( $sanitized['drag_n_drop_heading_tag'] ) ) {
+			$sanitized['drag_n_drop_heading_tag'] = dnd_cf7_sanitize_heading_tag( $sanitized['drag_n_drop_heading_tag'] );
+		}
+
 		return $sanitized;
+	}
+
+	// Restrict heading tag setting to a safe whitelist of HTML tags
+	function dnd_cf7_sanitize_heading_tag( $tag ) {
+		$allowed = array( 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div' );
+		$tag     = strtolower( trim( (string) $tag ) );
+
+		return in_array( $tag, $allowed, true ) ? $tag : 'h3';
 	}
 
 	// Get admin option settings
