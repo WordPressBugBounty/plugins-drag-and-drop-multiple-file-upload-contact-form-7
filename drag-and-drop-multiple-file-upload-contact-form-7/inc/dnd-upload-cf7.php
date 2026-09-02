@@ -82,11 +82,17 @@
 			return 'invalid_request';
 		}
 
+		// Disable max network cap
+		if ( 'yes' === dnd_cf7_settings( 'drag_n_drop_disable_cap' ) ) {
+			return;
+		}
+
 		// 1. Setup Caps
 		$max_file        = dnd_cf7_get_option( $form_id, 'max-file' );
+		$form_total_cap  = is_array( $max_file ) ? array_sum( $max_file ) : 10;
 		$max_user_limit  = is_array( $max_file ) ? (int)$max_file["$upload_name"] : 10; // Get file upload settings by each field name.
 		$max_network_cap = dnd_cf7_settings('drag_n_drop_max_network_cap');
-		$max_network_cap = $max_network_cap ? (int) $max_network_cap : ( $max_user_limit * 3 );  // Max network cap per IP address.
+		$max_network_cap = $max_network_cap ? (int) $max_network_cap : ( $form_total_cap * 4 );  // Max network cap per IP address.
 		$time_exp_window = apply_filters( 'dnd_cf7_exp_window', 900 ); // 15 minutes lifespan for the tracking window.
 
 		// 2. Get token and IP address
@@ -113,11 +119,14 @@
 		// 3. Evaluate Limitations
 
 		// Rule A: Check if this specific browser token has hit max file limit.
+		$max_user_limit = ( $max_user_limit <= 10 ? 10 : $max_user_limit  * 3 ); // default 10 if max_file_limit is less than 10
 		if ( $user_upload_count >= $max_user_limit ) {
 			return 'max_limit_reached';
 		}
 
+
 		// Rule B: Check if the network environment is triggering bulk bot flooding (100+ files)
+		$max_network_cap = ( $max_network_cap <= 10 ? 10 : $max_network_cap ); // default 10 if max_network_cap is less than 10
 		if ( $network_upload_count >= $max_network_cap ) {
 			return 'network_cap_threshold_reached';
 		}
@@ -1423,194 +1432,211 @@
 	// Admin Settings
 	function dnd_upload_admin_settings( ) {
 		echo '<div class="wrap">';
+
 			echo '<h1>' . esc_html__( 'Drag & Drop Uploader - Settings', 'drag-and-drop-multiple-file-upload-contact-form-7' ) . '</h1>';
 
-				echo '<div class="update-nag notice" style="width: 98%;padding: 0px 10px;margin-bottom: 5px;">';
-				echo '<p>';
-				echo sprintf(
-					esc_html__( '🔥 %1$sUpgrade Now%2$s for Extra Features: Explore the %3$sPro Version%4$s Today!', 'drag-and-drop-multiple-file-upload-contact-form-7' ),
-					'<span style="color:#038d03;">','</span>',
-					'<a href="https://www.codedropz.com/drag-drop-multiple-file-upload-for-contact-form-7/" target="_blank">','</a>',
-					);
-				echo ' | ';
-				echo sprintf(
-					esc_html__( '🚀 Try Our New Plugin: %sEasy File Upload & Approval%s', 'drag-and-drop-multiple-file-upload-contact-form-7' ),
-					'<a href="https://wordpress.org/plugins/easy-file-upload-approval/" target="_blank">','</a>'
+			echo '<div class="update-nag notice" style="width: 98%;padding: 0px 10px;margin-bottom: 5px;">';
+			echo '<p>';
+			echo sprintf(
+				esc_html__( '🔥 %1$sUpgrade Now%2$s for Extra Features: Explore the %3$sPro Version%4$s Today!', 'drag-and-drop-multiple-file-upload-contact-form-7' ),
+				'<span style="color:#038d03;">','</span>',
+				'<a href="https://www.codedropz.com/drag-drop-multiple-file-upload-for-contact-form-7/" target="_blank">','</a>',
 				);
-				echo '</p>';
+			echo ' | ';
+			echo sprintf(
+				esc_html__( '🚀 Try Our New Plugin: %sEasy File Upload & Approval%s', 'drag-and-drop-multiple-file-upload-contact-form-7' ),
+				'<a href="https://wordpress.org/plugins/easy-file-upload-approval/" target="_blank">','</a>'
+			);
+			echo '</p>';
+			echo '</div>';
+
+			// Promo
+			echo '
+			<span style="position:absolute;right: 20px;top: 6%;display:none;">
+				<a style="display:block;" href="https://www.codedropz.com/drag-drop-multiple-file-upload-for-contact-form-7/" target="_blank">
+					<img width="150" src="'. plugins_url( 'assets/images/cd-promo-banner.png', dirname(__FILE__) ) .'" />
+				</a>
+			</span>';
+
+			// Error settings
+			settings_errors();
+
+				echo '<div class="main-plugin-settings">';
+
+					echo '<form method="post" action="options.php"> ';
+						settings_fields( 'drag-n-drop-upload-file-cf7' );
+						do_settings_sections( 'drag-n-drop-upload-file-cf7' );
+			?>
+
+					<table class="form-table" style="display:none;">
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Translate To','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><?php wp_dropdown_languages( array('name' => 'drag_n_drop_lang', 'id' => 'drag_n_drop_lang') ); ?>
+								<div style="margin-top:20px;">
+									<strong><?php esc_html_e( 'Translated: ', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?></strong><a href=""><?php esc_html_e( 'abc', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?></a>
+								</div>
+							</td>
+						</tr>
+					</table>
+
+					<table class="form-table">
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Send Attachment as links?','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input name="dndmfu_settings[drag_n_drop_mail_attachment]" type="checkbox" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_mail_attachment')); ?>></td>
+						</tr>
+					</table>
+
+					<h2><?php esc_html_e('Uploader Info','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
+
+					<table class="form-table">
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Heading Tag','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td>
+								<select name="dndmfu_settings[drag_n_drop_heading_tag]">
+									<option value="h1" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h1'); ?>>H1</option>
+									<option value="h2" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h2'); ?>>H2</option>
+									<option value="h3" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag','h3'), 'h3'); ?>>H3</option>
+									<option value="h4" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h4'); ?>>H4</option>
+									<option value="h5" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h5'); ?>>H5</option>
+									<option value="h6" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h6'); ?>>H6</option>
+									<option value="span" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'span'); ?>>Span</option>
+									<option value="div" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'div'); ?>>Div</option>
+								</select>
+							</td>
+						</tr>
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Drag & Drop Text','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="text" name="dndmfu_settings[drag_n_drop_text]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_text') ); ?>" placeholder="<?php esc_attr_e( 'Drag & Drop Files Here ', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?>" /></td>
+						</tr>
+						<tr valign="top">
+							<th scope="row"></th>
+							<td><input type="text" name="dndmfu_settings[drag_n_drop_separator]" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_separator') ); ?>" placeholder="<?php esc_attr_e( 'or', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?>" /></td>
+						</tr>
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Browse Text','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="text" name="dndmfu_settings[drag_n_drop_browse_text]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_browse_text') ); ?>" placeholder="<?php esc_attr_e( 'Browse Files', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?>" /></td>
+						</tr>
+					</table>
+
+					<h2><?php esc_html_e('Error Message','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
+
+					<table class="form-table">
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('File exceeds server limit','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="text" name="dndmfu_settings[drag_n_drop_error_server_limit]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_server_limit') ); ?>" placeholder="<?php echo dnd_cf7_error_msg('server_limit'); ?>" /></td>
+						</tr>
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Failed to Upload','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="text" name="dndmfu_settings[drag_n_drop_error_failed_to_upload]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_failed_to_upload') ); ?>" placeholder="<?php echo dnd_cf7_error_msg('failed_upload'); ?>" /></td>
+						</tr>
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Files too large','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="text" name="dndmfu_settings[drag_n_drop_error_files_too_large]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_files_too_large') ); ?>" placeholder="<?php echo dnd_cf7_error_msg('large_file'); ?>" /></td>
+						</tr>
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Invalid file Type','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="text" name="dndmfu_settings[drag_n_drop_error_invalid_file]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_invalid_file') ); ?>" placeholder="<?php echo dnd_cf7_error_msg('invalid_type'); ?>" /></td>
+						</tr>
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Max File Limit','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td>
+								<input type="text" name="dndmfu_settings[drag_n_drop_error_max_file]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_max_file') ); ?>" />
+								<p class="description"><?php esc_html_e( 'Example: `Note : Some of the files are not uploaded ( Only %count% files allowed )`', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?></p>
+							</td>
+						</tr>
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Minimum File','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td>
+								<input type="text" name="dndmfu_settings[drag_n_drop_error_min_file]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_min_file') ); ?>" />
+								<p class="description">Default: `<?php esc_html_e( 'Minimum number of files required is {minimum}', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?>`</p>
+							</td>
+						</tr>
+					</table>
+
+					<h2><?php esc_html_e('Auto Delete Files','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
+					<table class="form-table">
+						<tr valign="top">
+								<th scope="row"><?php esc_html_e('Don\'t delete files','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_disable_auto_delete]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_disable_auto_delete')); ?>> Yes <br><p class="description"><em><?php esc_html_e( 'The default will automatically delete files 1-2 hours after submissions, if you want to keep files check "Yes" above. ', 'drag-and-drop-multiple-file-upload-contact-form-7'); ?></em></p></td>
+						</tr>
+					</table>
+
+					<h2><?php esc_html_e('Unique Filename','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
+
+					<table class="form-table">
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Randomize','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_enable_unique_name]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_enable_unique_name')); ?>> Yes <br><p class="description"><em><?php esc_html_e('If checked, it will generate a unique/randomized filename.', 'drag-and-drop-multiple-file-upload-contact-form-7'); ?></em></p></td>
+						</tr>
+					</table>
+
+					<h2><?php esc_html_e('Spam Filtering Issue','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
+
+					<table class="form-table">
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Fix Spam','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_fix_spam]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_fix_spam')); ?>> Yes <p class="description"><em>If a “spam” answer is the response, Contact Form 7 will suspend the email and show a message saying, “There was an error trying to send your message", force to send message by checking this option..</em></p></td>
+						</tr>
+					</table>
+
+					<h2 style="display:none"><?php esc_html_e('Use jQuery','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
+
+					<table class="form-table" style="display:none;">
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Enable jQuery','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_use_jquery]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_use_jquery')); ?>> Yes <p class="description"><em>Activate this option in case there are any problems with our plugin when utilizing native Javascript.</em></p></td>
+						</tr>
+					</table>
+
+					<h2 style="display:none;"><?php esc_html_e('Disable Button','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
+
+					<table style="display:none;" class="form-table">
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Disable Submit button','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_disable_btn]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_disable_btn')); ?>> Yes <p class="description">Disable submit button if there's an error.</p></td>
+						</tr>
+					</table>
+
+					<h2><?php esc_html_e('Network Cap','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
+
+					<table class="form-table">
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Disable Network Cap?','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td>
+								<input type="checkbox" name="dndmfu_settings[drag_n_drop_disable_cap]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_disable_cap')); ?>> Yes
+							</td>
+						</tr>
+						<tr valign="top">
+							<th scope="row"><?php esc_html_e('Max Network Cap','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
+							<td>
+								<input type="text" <?php disabled( dnd_cf7_settings('drag_n_drop_disable_cap'), 'yes' ); ?> name="dndmfu_settings[drag_n_drop_max_network_cap]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_max_network_cap') ); ?>" placeholder="50 or 100" />
+								<p class="description"><?php esc_html_e('Increase the maximum network cap if you encounter an error such as “network_cap_threshold_reached.”', 'drag-and-drop-multiple-file-upload-contact-form-7'); ?></p>
+							</td>
+						</tr>
+					</table>
+
+					<style id="codedropz-admin-settings">
+						.main-plugin-settings { width: 78%; float: left; }
+						.cd-banner { float: right; width: 22%; margin-top: 2%; }
+						.cd-banner img { width: 100%; border-radius: 8px; }
+						@media screen and (max-width: 782px) {
+							.main-plugin-settings, .cd-banner { width: 100%; }
+						}
+					</style>
+
+					<?php submit_button(); ?>
+
+			<?php
+					echo '</form>';
 				echo '</div>';
 
-				// Promo
-				echo '
-				<span style="position:absolute;right: 20px;top: 6%;">
-					<a style="display:block;" href="https://www.codedropz.com/drag-drop-multiple-file-upload-for-contact-form-7/" target="_blank">
-						<img width="150" src="'. plugins_url( 'assets/images/cd-promo-banner.png', dirname(__FILE__) ) .'" />
+				echo '<div class="cd-banner">
+					<a href="https://www.codedropz.com/drag-drop-multiple-file-upload-for-contact-form-7/?utm_source=plugin_admin&utm_medium=upsell&utm_campaign=pro_upgrade#shop" target="_blank">
+						<img src="'. plugins_url( 'assets/images/codedropz-banner.jpeg', dirname(__FILE__) ) .'">
 					</a>
-				</span>';
+				</div>';
 
-				// Error settings
-				settings_errors();
-
-				echo '<form method="post" action="options.php"> ';
-					settings_fields( 'drag-n-drop-upload-file-cf7' );
-					do_settings_sections( 'drag-n-drop-upload-file-cf7' );
-		?>
-
-                <table class="form-table" style="display:none;">
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Translate To','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><?php wp_dropdown_languages( array('name' => 'drag_n_drop_lang', 'id' => 'drag_n_drop_lang') ); ?>
-                            <div style="margin-top:20px;">
-								<strong><?php esc_html_e( 'Translated: ', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?></strong><a href=""><?php esc_html_e( 'abc', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?></a>
-                            </div>
-                        </td>
-					</tr>
-				</table>
-
-				<table class="form-table">
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Send Attachment as links?','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input name="dndmfu_settings[drag_n_drop_mail_attachment]" type="checkbox" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_mail_attachment')); ?>></td>
-					</tr>
-				</table>
-
-				<h2><?php esc_html_e('Uploader Info','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
-
-				<table class="form-table">
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Heading Tag','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td>
-							<select name="dndmfu_settings[drag_n_drop_heading_tag]">
-								<option value="h1" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h1'); ?>>H1</option>
-								<option value="h2" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h2'); ?>>H2</option>
-								<option value="h3" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag','h3'), 'h3'); ?>>H3</option>
-								<option value="h4" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h4'); ?>>H4</option>
-								<option value="h5" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h5'); ?>>H5</option>
-								<option value="h6" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'h6'); ?>>H6</option>
-                                <option value="span" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'span'); ?>>Span</option>
-                                <option value="div" <?php selected( dnd_cf7_settings('drag_n_drop_heading_tag'), 'div'); ?>>Div</option>
-							</select>
-						</td>
-					</tr>
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Drag & Drop Text','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="text" name="dndmfu_settings[drag_n_drop_text]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_text') ); ?>" placeholder="<?php esc_attr_e( 'Drag & Drop Files Here ', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?>" /></td>
-					</tr>
-					<tr valign="top">
-						<th scope="row"></th>
-						<td><input type="text" name="dndmfu_settings[drag_n_drop_separator]" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_separator') ); ?>" placeholder="<?php esc_attr_e( 'or', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?>" /></td>
-					</tr>
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Browse Text','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="text" name="dndmfu_settings[drag_n_drop_browse_text]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_browse_text') ); ?>" placeholder="<?php esc_attr_e( 'Browse Files', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?>" /></td>
-					</tr>
-				</table>
-
-				<h2><?php esc_html_e('Error Message','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
-
-				<table class="form-table">
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('File exceeds server limit','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="text" name="dndmfu_settings[drag_n_drop_error_server_limit]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_server_limit') ); ?>" placeholder="<?php echo dnd_cf7_error_msg('server_limit'); ?>" /></td>
-					</tr>
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Failed to Upload','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="text" name="dndmfu_settings[drag_n_drop_error_failed_to_upload]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_failed_to_upload') ); ?>" placeholder="<?php echo dnd_cf7_error_msg('failed_upload'); ?>" /></td>
-					</tr>
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Files too large','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="text" name="dndmfu_settings[drag_n_drop_error_files_too_large]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_files_too_large') ); ?>" placeholder="<?php echo dnd_cf7_error_msg('large_file'); ?>" /></td>
-					</tr>
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Invalid file Type','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="text" name="dndmfu_settings[drag_n_drop_error_invalid_file]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_invalid_file') ); ?>" placeholder="<?php echo dnd_cf7_error_msg('invalid_type'); ?>" /></td>
-					</tr>
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Max File Limit','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td>
-							<input type="text" name="dndmfu_settings[drag_n_drop_error_max_file]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_max_file') ); ?>" />
-							<p class="description"><?php esc_html_e( 'Example: `Note : Some of the files are not uploaded ( Only %count% files allowed )`', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?></p>
-						</td>
-					</tr>
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Minimum File','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td>
-							<input type="text" name="dndmfu_settings[drag_n_drop_error_min_file]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_error_min_file') ); ?>" />
-							<p class="description">Default: `<?php esc_html_e( 'Minimum number of files required is {minimum}', 'drag-and-drop-multiple-file-upload-contact-form-7' ); ?>`</p>
-						</td>
-					</tr>
-				</table>
-
-				<h2><?php esc_html_e('Auto Delete Files','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
-				<table class="form-table">
-					<tr valign="top">
-							<th scope="row"><?php esc_html_e('Don\'t delete files','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_disable_auto_delete]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_disable_auto_delete')); ?>> Yes <br><p class="description"><em><?php esc_html_e( 'The default will automatically delete files 1-2 hours after submissions, if you want to keep files check "Yes" above. ', 'drag-and-drop-multiple-file-upload-contact-form-7'); ?></em></p></td>
-					</tr>
-				</table>
-
-                <h2><?php esc_html_e('Unique Filename','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
-
-				<table class="form-table">
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Randomize','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_enable_unique_name]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_enable_unique_name')); ?>> Yes <br><p class="description"><em><?php esc_html_e('If checked, it will generate a unique/randomized filename.', 'drag-and-drop-multiple-file-upload-contact-form-7'); ?></em></p></td>
-					</tr>
-				</table>
-
-                <h2><?php esc_html_e('Spam Filtering Issue','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
-
-				<table class="form-table">
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Fix Spam','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_fix_spam]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_fix_spam')); ?>> Yes <p class="description"><em>If a “spam” answer is the response, Contact Form 7 will suspend the email and show a message saying, “There was an error trying to send your message", force to send message by checking this option..</em></p></td>
-					</tr>
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Upload Spam Protection','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td>
-							<input type="checkbox" name="dndmfu_settings[drag_n_drop_spam_security]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_spam_security')); ?>> Yes
-							<p class="description">
-								<em><?php esc_html_e( 'If you encounter spam uploads or automated file upload abuse, enable this option. Suspicious upload activity will be automatically detected and blocked.', 'drag-and-drop-multiple-file-upload-contact-form-7'); ?></em>
-							</p>
-						</td>
-					</tr>
-				</table>
-
-                <h2 style="display:none"><?php esc_html_e('Use jQuery','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
-
-				<table class="form-table" style="display:none;">
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Enable jQuery','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_use_jquery]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_use_jquery')); ?>> Yes <p class="description"><em>Activate this option in case there are any problems with our plugin when utilizing native Javascript.</em></p></td>
-					</tr>
-				</table>
-
-				<h2 style="display:none;"><?php esc_html_e('Disable Button','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
-
-				<table style="display:none;" class="form-table">
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Disable Submit button','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td><input type="checkbox" name="dndmfu_settings[drag_n_drop_disable_btn]" value="yes" <?php checked('yes', dnd_cf7_settings('drag_n_drop_disable_btn')); ?>> Yes <p class="description">Disable submit button if there's an error.</p></td>
-					</tr>
-				</table>
-
-				<h2><?php esc_html_e('Network Cap','drag-and-drop-multiple-file-upload-contact-form-7'); ?></h2>
-
-				<table class="form-table">
-					<tr valign="top">
-						<th scope="row"><?php esc_html_e('Max Network Cap','drag-and-drop-multiple-file-upload-contact-form-7'); ?></th>
-						<td>
-							<input type="text" name="dndmfu_settings[drag_n_drop_max_network_cap]" class="regular-text" value="<?php echo esc_attr( dnd_cf7_settings('drag_n_drop_max_network_cap') ); ?>" placeholder="50 or 100" />
-							<p class="description"><?php esc_html_e('Increase the maximum network cap if you encounter an error such as “network_cap_threshold_reached.”', 'drag-and-drop-multiple-file-upload-contact-form-7'); ?></p>
-						</td>
-					</tr>
-				</table>
-
-				<?php submit_button(); ?>
-
-		<?php
-			echo '</form>';
-		echo '</div>';
+		echo '</div>'; // End .wrap
 	}
 
 	// Add script in footer

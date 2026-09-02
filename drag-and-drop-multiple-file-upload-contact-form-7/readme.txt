@@ -4,7 +4,7 @@ Donate link : http://codedropz.com/donation
 Tags: drag and drop, contact form 7, ajax uploader, multiple file, upload
 Requires at least: 3.0.1
 Tested up to: 7.0
-Stable tag: 1.3.9.9
+Stable tag: 1.4.0
 Requires PHP: 5.2.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -66,7 +66,7 @@ Check out the available features in the [**PRO version**](https://www.codedropz.
 9. **Chunked Uploads** - Upload large files in smaller chunks to avoid timeouts.
 10. **Max Total Size** - Set the maximum combined size for all uploaded files.
 11. **Parallel Upload** - Limit simultaneous uploads to optimize server performance.
-12. **Custom Filename** - Define custom filename patterns: *( {filename}, {cf7-field-name}, {ip_address}, {random}, {post_id}, {post_slug}, etc. )*
+12. **Custom Filename** - Create custom filename patterns using variables such as `{filename}`, `{cf7-field-name}`, `{ip_address}`, `{random}`, `{post_id}`, `{post_slug}`, and more.
 13. **Color Options** - Customize colors for **file size**, **progress bar**, **filename**, and more.
 14. **Prevent Duplicate** - Disable button to prevent duplicate submissions.
 15. **Custom Theme** - Switch between **"Dark"** or **"Light"** themes.
@@ -184,6 +184,11 @@ To install this plugin see below:
 7. Remote Storage - Pro Features
 
 == Changelog ==
+
+= 1.4.0 =
+- Hotfix - Fixed max network cap error while uploading files if more than 1 drag & drop file upload.
+- Added - New settings where user can enable/disable network cap.
+- New - New option/settings to disable network cap. [Contact->Drag & Drop Upload->Network Cap]
 
 = 1.3.9.9 =
 - Security - Fixed a stored XSS vulnerability in the Heading Tag setting. (Thanks to "Sai Praneeth Koti" via WPScan)

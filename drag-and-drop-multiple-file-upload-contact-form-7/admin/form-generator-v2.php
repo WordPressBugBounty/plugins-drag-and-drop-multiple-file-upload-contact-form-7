@@ -4,6 +4,7 @@
 			echo '<style type="text/css">
 				.control-box.dnd-file-upload legend { float: left; width: 160px; }
 				.control-box.dnd-file-upload fieldset { margin-block: 4px!important; }
+				.control-box.dnd-file-upload input[type=checkbox] { margin-left: 34px; }
 			</style>';
 		}
 	});
