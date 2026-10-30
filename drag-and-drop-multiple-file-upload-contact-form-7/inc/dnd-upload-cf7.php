@@ -336,14 +336,15 @@
 
 		if( $forms = $forms_tags->scan_form_tags() ) {
 			foreach( $forms as $field ) {
+				if ( 'mfile' !== $field->basetype ) {
+					continue;
+				}
 				$field_name = $field->name;
-				if( $field->basetype == 'mfile' && isset( $posted_data[$field_name] ) && ! empty( $posted_data[$field_name] ) ) {
-					if ( is_array( $posted_data ) ) {
-						foreach( $posted_data[$field_name] as $key => $file ) {
-							$file = wp_unslash( $file );
-							if ( false === strpos( $file, '../' ) ) {
-								$posted_data[$field_name][$key] = trailingslashit( $uploads_dir['upload_url'] ) . $file;
-							}
+				if ( isset( $posted_data[ $field_name ] ) && is_array( $posted_data[ $field_name ] ) ) {
+					foreach( $posted_data[ $field_name ] as $key => $file ) {
+						$file = wp_unslash( $file );
+						if ( false === strpos( $file, '../' ) ) {
+							$posted_data[ $field_name ][ $key ] = trailingslashit( $uploads_dir['upload_url'] ) . $file;
 						}
 					}
 				}
@@ -355,7 +356,8 @@
 
 	// Hooks for admin settings
 	function dnd_admin_settings() {
-		add_submenu_page( 'wpcf7', esc_html__( 'Drag & Drop Uploader - Settings', 'drag-and-drop-multiple-file-upload-contact-form-7' ), esc_html__( 'Drag & Drop Upload', 'drag-and-drop-multiple-file-upload-contact-form-7' ), 'manage_options', 'drag-n-drop-upload','dnd_upload_admin_settings');
+		$cf7_slug = version_compare( WPCF7_VERSION, '6.2.0', '>=' ) ? 'wpcf7-dashboard' : 'wpcf7';
+		add_submenu_page( $cf7_slug, esc_html__( 'Drag & Drop Uploader - Settings', 'drag-and-drop-multiple-file-upload-contact-form-7' ), esc_html__( 'Drag & Drop Upload', 'drag-and-drop-multiple-file-upload-contact-form-7' ), 'manage_options', 'drag-n-drop-upload','dnd_upload_admin_settings');
 		add_action('admin_init','dnd_upload_register_settings');
 	}
 
@@ -1080,8 +1082,23 @@
 		$folder = isset( $_POST['upload_folder'] ) ? sanitize_text_field( $_POST['upload_folder'] ) : null;
 
 		// @since 1.3.9.9 never write to the protected root itself - force a subfolder when none is supplied.
-		if ( empty( $folder ) ) {
+		if ( empty( $folder ) || ! preg_match( '/^[A-Za-z0-9_-]{8,64}$/', $folder ) ) {
 			$folder = wp_generate_password( 12, false, false );
+		}
+
+		// Security added Oct 2026 - verify folder ownership BEFORE creating the folder or writing any file
+		// (this check used to run after the file was already moved).
+		$folder_uuid  = $folder;
+		$token_key    = 'dnd_cf7_token_' . $folder_uuid;
+		$client_token = (string) sanitize_key( $_POST['token'] ?? '' ); // Client token passed via JS.
+
+		if ( empty( $client_token ) ) {
+			wp_send_json_error( 'Error: Missing security token.' );
+		}
+
+		$existing_token = get_transient( $token_key );
+		if ( false !== $existing_token && ! hash_equals( (string) $existing_token, $client_token ) ) {
+			wp_send_json_error( 'Error: Unauthorized to upload or modify this folder.' );
 		}
 
 		$path = dnd_get_upload_dir( $folder ); // ok
@@ -1137,6 +1154,11 @@
 
 		// Get file extension
         $extension = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+
+		// @Since 1.4.0 - Check if the file is unsafe.
+		if ( dnd_cf7_is_unsafe_file( $filename, $tmp_file ) ) {
+			wp_send_json_error( esc_html( dnd_cf7_settings('drag_n_drop_error_invalid_file') ) ?: dnd_cf7_error_msg('invalid_type') );
+		}
 
         // Validate File Types (if supported type is set to "*")
 		if ( $supported_type == '*' ) {
@@ -1203,30 +1225,10 @@
 			wp_send_json_error( '('. $file['error'] .') ' . ( $failed_error ? esc_html( $failed_error ) : dnd_cf7_error_msg('failed_upload') ) );
 		} else {
 
-			// Get folder uuid from the path/dir.
-			$folder_uuid  = wp_basename( $path['upload_dir'] );
-			$token_key    = 'dnd_cf7_token_' . $folder_uuid;
-			$client_token = (string) sanitize_key( $_POST['token'] ?? '' ); // [fixed] consistent with delete's sanitize_key()
-
-			if ( empty( $client_token ) ) {
-				wp_send_json_error( 'Error: Missing security token.' );
-			}
-
-			// Check if a token already exists for this folder.
-			$existing_token = get_transient( $token_key );
-
-			// Generate cryptographic token and store it in transient for 12 hours. [added april 2026].
+			// Security added Oct 2026 - ownership is already verified before the upload (see above),
+			// so here we only save the token when the folder is new.
 			if ( false === $existing_token ) {
 				set_transient( $token_key, $client_token, 12 * HOUR_IN_SECONDS );
-				$upload_token = $client_token;
-			} else {
-				// Verify ownership: match existing and requested token.
-				if ( ! hash_equals( (string) $existing_token, $client_token ) ) {
-					wp_send_json_error( 'Error: Unauthorized to upload or modify this folder.' );
-				}
-
-				// Assignining existing token only if valid.
-				$upload_token = $existing_token;
 			}
 
             // Setup path and files url.
@@ -1394,9 +1396,40 @@
 		return in_array( strtolower( $filename ), array( '.htaccess', 'web.config', '.user.ini' ), true );
 	}
 
+	// @since 1.4.0 - Returns true if the file is html/xml/script-like.
+	// 1. every extension in the file name (ex: poc.xht, poc.xml, poc.phtm, poc.php.jpg)
+	// 2. the first bytes of the file content, no matter what the extension says.
+	function dnd_cf7_is_unsafe_file( $filename, $tmp_file ) {
+
+		// 1. Check extensions.
+		$allowed_ext = apply_filters( 'dnd_cf7_allowed_ext', array( 'ipt' ) );
+		$parts       = explode( '.', strtolower( wp_basename( $filename ) ) );
+		array_shift( $parts ); // first part is the file name, not an extension.
+
+		foreach ( $parts as $ext ) {
+			if ( in_array( $ext, $allowed_ext, true ) ) {
+				continue;
+			}
+			if ( preg_match( '/^(htm\w*|x?html?|xht\w*|xml|xsl\w*|xsd|svg\w*|rdf|rss|atom|mht\w*|dht\w*|sht\w*|pht\w*|php\w*|phar|inc|htc|hta|htaccess|htpasswd)$/', $ext ) ) {
+				return true;
+			}
+		}
+
+		// 2. Check content (first 1KB only).
+		$head = @file_get_contents( $tmp_file, false, null, 0, 1024 );
+		if ( empty( $head ) ) {
+			return false;
+		}
+
+		$head = str_replace( "\0", '', $head ); // remove null bytes (catches UTF-16 files).
+		$head = ltrim( preg_replace( '/^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)/', '', $head ) ); // remove BOM + leading spaces.
+
+		return (bool) preg_match( '/^(<\?(xml|php)|<!doctype|<!--|<html|<head|<body|<svg|<script|<iframe|<xsl:|<meta)/i', $head );
+	}
+
 	// list of not allowed extensions.
 	function dnd_cf7_not_allowed_ext() {
-		return array( 'html', 'svg', 'svgz', 'phar', 'php', 'php3','php4','pht', 'php5', 'php7', 'php8', 'xhtml','shtml', 'mhtml', 'dhtml', 'phtml','exe','script', 'app', 'asp', 'bas', 'bat', 'cer', 'cgi', 'chm', 'cmd', 'com', 'cpl', 'crt', 'csh', 'csr', 'dll', 'drv', 'fxp', 'flv', 'hlp', 'hta', 'htaccess', 'htm', 'htpasswd', 'inf', 'ins', 'isp', 'jar', 'js', 'jse', 'jsp', 'ksh', 'lnk', 'mdb', 'mde', 'mdt', 'mdw', 'msc', 'msi', 'msp', 'mst', 'ops', 'pcd', 'pif', 'pl', 'prg', 'ps1', 'ps2', 'py', 'rb', 'reg', 'scr', 'sct', 'sh', 'shb', 'shs', 'sys', 'swf', 'tmp', 'torrent', 'url', 'vb', 'vbe', 'vbs', 'vbscript', 'wsc', 'wsf', 'wsf', 'wsh', 'web.config' ); // @since 1.3.9.9 added web.config
+		return array( 'html', 'svg', 'svgz', 'phar', 'php', 'php3','php4','pht', 'php5', 'php7', 'php8', 'xhtml','xht','xml','xsl','xslt','xsd','shtml','shtm','phtm', 'mhtml', 'dhtml', 'phtml','exe','script', 'app', 'asp', 'bas', 'bat', 'cer', 'cgi', 'chm', 'cmd', 'com', 'cpl', 'crt', 'csh', 'csr', 'dll', 'drv', 'fxp', 'flv', 'hlp', 'hta', 'htaccess', 'htm', 'htpasswd', 'inf', 'ins', 'isp', 'jar', 'js', 'jse', 'jsp', 'ksh', 'lnk', 'mdb', 'mde', 'mdt', 'mdw', 'msc', 'msi', 'msp', 'mst', 'ops', 'pcd', 'pif', 'pl', 'prg', 'ps1', 'ps2', 'py', 'rb', 'reg', 'scr', 'sct', 'sh', 'shb', 'shs', 'sys', 'swf', 'tmp', 'torrent', 'url', 'vb', 'vbe', 'vbs', 'vbscript', 'wsc', 'wsf', 'wsf', 'wsh', 'web.config' ); // @since 1.3.9.9 added web.config
 	}
 
 	// Add more validation for file extension
